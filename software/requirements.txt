@@ -1,0 +1,2 @@
+# 板端 kiosk 探测与后续 UI。Mac 上也可装，窗口走系统桌面而非 eglfs。
+PySide6-Essentials>=6.6

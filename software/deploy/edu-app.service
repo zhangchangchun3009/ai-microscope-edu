@@ -1,0 +1,24 @@
+[Unit]
+Description=AI microscope teaching kiosk (PySide6, no desktop)
+Documentation=file:///home/cat/ai-microscope-edu/software/README.md
+After=systemd-udev-settle.service
+Conflicts=scandog.service mipi-hmi.service edu-kiosk-probe.service
+
+[Service]
+Type=simple
+User=cat
+Group=cat
+SupplementaryGroups=video render input
+WorkingDirectory=/home/cat/ai-microscope-edu/software
+Environment=PYTHONUNBUFFERED=1
+# Mesa 缺 EGL_EXT_device_base，eglfs_kms 会 ABRT。先走 linuxfb 运行教学壳。
+# 后续接通硬件加速时再验证 Mali GBM + eglfs（见 README）。
+Environment=QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0
+Environment=QT_QPA_FB_HIDECURSOR=1
+ExecStartPre=+/usr/bin/sh -c 'echo 0 > /sys/class/vtconsole/vtcon1/bind || true'
+ExecStart=/home/cat/ai-microscope-edu/.venv/bin/python -m app
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

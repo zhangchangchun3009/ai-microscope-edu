@@ -1,0 +1,10 @@
+{
+  "device": "/dev/dri/card0",
+  "outputs": [
+    {
+      "name": "DSI-1",
+      "mode": "preferred",
+      "primary": true
+    }
+  ]
+}

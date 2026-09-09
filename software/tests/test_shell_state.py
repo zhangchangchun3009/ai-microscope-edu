@@ -1,0 +1,113 @@
+"""主界面壳层状态：与 edu-kiosk-ui-design §3–§5 一致，无 Qt。"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+_SOFTWARE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_SOFTWARE))
+
+from app.shell_state import (  # noqa: E402
+    DRAG_THRESHOLD_PX,
+    FAB_MARGIN,
+    FAB_SIZE,
+    FabGestureKind,
+    FabPos,
+    Overlay,
+    RightPanel,
+    SPLIT_DEFAULT,
+    ShellState,
+    classify_fab_gesture,
+    default_fab_pos,
+)
+
+
+def test_default_is_full_preview_with_strip_open() -> None:
+    s = ShellState()
+    assert s.strip_expanded is True
+    assert s.right_panel is RightPanel.NONE
+    assert s.overlay is Overlay.NONE
+    assert s.split_open is False
+    assert s.split_ratio == SPLIT_DEFAULT
+
+
+def test_toggle_strip() -> None:
+    s = ShellState()
+    s.toggle_strip()
+    assert s.strip_expanded is False
+    s.toggle_strip()
+    assert s.strip_expanded is True
+
+
+def test_annotate_and_count_do_not_open_split() -> None:
+    s = ShellState()
+    s.open_tool("annotate")
+    assert s.overlay is Overlay.ANNOTATE
+    assert s.split_open is False
+    s.open_tool("count")
+    assert s.overlay is Overlay.COUNT
+    assert s.right_panel is RightPanel.NONE
+
+
+def test_annotate_closes_right_panel_from_split() -> None:
+    s = ShellState()
+    s.open_tool("settings")
+    assert s.split_open is True
+    s.open_tool("annotate")
+    assert s.split_open is False
+    assert s.right_panel is RightPanel.NONE
+    assert s.overlay is Overlay.ANNOTATE
+
+
+def test_fusion_stitch_history_settings_open_split() -> None:
+    s = ShellState()
+    for name, panel in (
+        ("fusion", RightPanel.FUSION),
+        ("stitch", RightPanel.STITCH),
+        ("history", RightPanel.HISTORY),
+        ("settings", RightPanel.SETTINGS),
+    ):
+        s.open_tool(name)
+        assert s.right_panel is panel
+        assert s.split_open is True
+        assert s.overlay is Overlay.NONE
+    s.close_right()
+    assert s.split_open is False
+    assert s.right_panel is RightPanel.NONE
+
+
+def test_split_ratio_clamped() -> None:
+    s = ShellState()
+    s.set_split_ratio(0.05)
+    assert s.split_ratio == pytest.approx(0.25)
+    s.set_split_ratio(0.95)
+    assert s.split_ratio == pytest.approx(0.75)
+    s.set_split_ratio(0.4)
+    assert s.split_ratio == pytest.approx(0.4)
+
+
+def test_fab_clamped_inside_preview() -> None:
+    pos = FabPos(x=-10, y=5000).clamped(width=1080, height=1920, size=72)
+    assert 8 <= pos.x <= 1080 - 72 - 8
+    assert 8 <= pos.y <= 1920 - 72 - 8
+
+
+def test_default_fab_pos_right_center_landscape() -> None:
+    """无存档时浮标在预览右侧垂直居中（按当前宽高，不假设已旋转）。"""
+    pos = default_fab_pos(1920, 1080)
+    assert pos.x == pytest.approx(1920 - FAB_SIZE - FAB_MARGIN)
+    assert pos.y == pytest.approx((1080 - FAB_SIZE) / 2)
+
+
+def test_fab_gesture_drag_vs_tap_vs_ptt() -> None:
+    assert classify_fab_gesture(moved=DRAG_THRESHOLD_PX, held_s=0.1) is FabGestureKind.DRAG
+    assert classify_fab_gesture(moved=0.0, held_s=0.1) is FabGestureKind.TAP
+    assert classify_fab_gesture(moved=0.0, held_s=0.4) is FabGestureKind.PTT
+
+
+def test_unknown_tool_raises() -> None:
+    with pytest.raises(KeyError):
+        ShellState().open_tool("wifi")

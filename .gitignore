@@ -1,0 +1,24 @@
+# macOS 元数据
+.DS_Store
+**/.DS_Store
+
+# 实拍图档与旧版 OpenSCAD 归档（体积大，不进 git）
+N-117M图/
+openscad/
+
+# 本地虚拟环境
+.venv/
+software/.venv/
+
+# 教学应用运行时数据
+software/var/
+
+# Python
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
