@@ -43,3 +43,47 @@ def fits_x1c_bed(w: float, h: float, bed: float = 256.0, margin: float = 6.0) ->
     """平放是否进拓竹 X1C 热床（留边）。整屏 258 面应失败。"""
     limit = bed - margin
     return w <= limit and h <= limit
+
+
+def beam_rise(hyp: float, horiz: float) -> float:
+    """横梁斜边 hyp、水平投影 horiz 时的升高（不量角度）。"""
+    return math.sqrt(hyp * hyp - horiz * horiz)
+
+
+def beam_tilt_deg(hyp: float, horiz: float) -> float:
+    """横梁相对水平的倾角（度），由斜边与水平边算出。"""
+    return math.degrees(math.acos(horiz / hyp))
+
+
+def tube_axis_y(back_y: float, axis_from_back: float) -> float:
+    """三目筒轴的世界 Y：臂后表面 + 卡尺水平距。"""
+    return back_y + axis_from_back
+
+
+def screen_contact_y(back_y: float, axis_from_back: float, tube_d: float) -> float:
+    """屏上边触点 Y。屏朝 −Y，碰到筒靠近臂背面的一侧。"""
+    return tube_axis_y(back_y, axis_from_back) - tube_d / 2.0
+
+
+def screen_origin_yz(
+    contact_y: float,
+    contact_z: float,
+    face_h: float,
+    tilt_deg: float,
+) -> tuple[float, float]:
+    """layout 里 rotate([tilt,0,0]) 后，屏顶 (0, face_h, 0) 落到触点时，屏原点的世界 y、z。"""
+    a = math.radians(tilt_deg)
+    return (
+        contact_y - face_h * math.cos(a),
+        contact_z - face_h * math.sin(a),
+    )
+
+
+def beam_join_y(back_y: float) -> float:
+    """横梁顶面在臂背面的接合 Y。"""
+    return back_y
+
+
+def back_beam_interior_deg(hyp: float, horiz: float) -> float:
+    """臂背面向下与横梁出去之间的夹角。背面竖直、梁向上扬时应为钝角。"""
+    return math.degrees(math.acos(-beam_rise(hyp, horiz) / hyp))

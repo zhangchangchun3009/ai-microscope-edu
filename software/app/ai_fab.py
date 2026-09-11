@@ -14,7 +14,7 @@ from app.shell_state import (
     FabPos,
     classify_fab_gesture,
 )
-from app.theme import ACCENT, ACCENT_DIM, DANGER, SURFACE
+from app.theme import ACCENT, ACCENT_DIM, DANGER, LINE, MUTED, SURFACE
 
 
 class AiFab(QPushButton):
@@ -42,25 +42,30 @@ class AiFab(QPushButton):
         """始终接收已开始手势的释放，避免拖出原区域后 Qt 丢失按压。"""
         return True
 
+    def _ring_colors(self) -> tuple[str, str, str]:
+        """返回外环填充、描边与图标色。禁用态用灰色，不走 PTT 警示色。"""
+        if not self.isEnabled():
+            return MUTED, LINE, MUTED
+        if self._ptt_on:
+            return DANGER, "#ffd0d6", "#fff6f7"
+        return ACCENT_DIM, ACCENT, ACCENT
+
     def paintEvent(self, _event) -> None:  # noqa: ANN001
-        """画青绿圆钮；PTT 时改为警示色外环。"""
+        """画青绿圆钮；PTT 时改为警示色外环；禁用时灰色。"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         d = min(self.width(), self.height()) - 4
         rect = QRectF(2, 2, d, d)
-        if self._ptt_on:
-            painter.setBrush(QColor(DANGER))
-            painter.setPen(QPen(QColor("#ffd0d6"), 2.2))
-        else:
-            painter.setBrush(QColor(ACCENT_DIM))
-            painter.setPen(QPen(QColor(ACCENT), 2.0))
+        fill, pen, icon_color = self._ring_colors()
+        painter.setBrush(QColor(fill))
+        painter.setPen(QPen(QColor(pen), 2.2 if self._ptt_on and self.isEnabled() else 2.0))
         painter.drawEllipse(rect)
         inner = QColor(SURFACE)
         inner.setAlpha(40)
         painter.setBrush(inner)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(rect.adjusted(8, 8, -8, -8))
-        icon = tool_pixmap("mic", int(d * 0.46), ACCENT if not self._ptt_on else "#fff6f7")
+        icon = tool_pixmap("mic", int(d * 0.46), icon_color)
         painter.drawPixmap(
             int((self.width() - icon.width()) / 2),
             int((self.height() - icon.height()) / 2),
@@ -75,6 +80,25 @@ class AiFab(QPushButton):
             self._ptt_on = True
             self.update()
             self.ptt_changed.emit(True)
+
+    def cancel_ptt(self) -> None:
+        """外部强制结束 PTT 视觉状态（用于禁用浮标前的复位）。
+
+        返回:
+            无。
+
+        副作用:
+            停掉长按计时器（避免禁用期间还触发 PTT）；若当前处于 PTT，
+            清除标记、重绘并发出 ``ptt_changed(False)``。不在 PTT 时只停计时器，
+            不重复发信号。Qt 不向禁用控件派发 release，因此自动收尾这类
+            "手指还按着就禁用" 的路径必须显式调用本方法。
+        """
+        self._hold.stop()
+        if not self._ptt_on:
+            return
+        self._ptt_on = False
+        self.update()
+        self.ptt_changed.emit(False)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         """记录左键按下位置，并启动 PTT 长按计时器。"""

@@ -77,7 +77,7 @@ openscad -o ../stl/board_box_lid.stl   -D 'part="lid"'   50_board_box.scad
 openscad -o ../stl/arm_clamp.stl       -D 'part="clamp"' 51_arm_clamp.scad
 ```
 
-改孔先打 **`board_box_fit.stl`**（接口顶墙 + 靠近接口的两颗支柱，约 180×50×22 mm，接口面已朝床）。对上了再打整壳体。看形状：打开 `50_board_box.scad`（默认 `preview`，壳体与盖并排，出音孔橙色）；抱箍打开 `51_arm_clamp.scad`。总装 `10_layout.scad` 的 `part="box"` 只挂壳体，盖不盖上。
+改孔先打 **`board_box_fit.stl`**（接口顶墙 + 靠近接口的两颗支柱，约 180×50×22 mm，接口面已朝床）。对上了再打整壳体。看形状：打开 `50_board_box.scad`（默认 `preview`，壳体与盖并排，出音孔橙色）；抱箍打开 `51_arm_clamp.scad`。总装打开 `10_layout.scad`（默认 `part="all"`：臂 + 盒抱箍 + 屏框托/横梁抱箍）。`part="box"` 只挂壳体，盖不盖上。
 
 合箱 M3 四角；盖中央 40×40 M3 对抱箍；抱箍左右侧壁各 1×M4 顶丝（底孔 3.6）加垫片。USB 无凸盖。喇叭装在盒内，外壳三条出音缝。
 
@@ -85,20 +85,22 @@ openscad -o ../stl/arm_clamp.stl       -D 'part="clamp"' 51_arm_clamp.scad
 
 设计：[`../../docs/superpowers/specs/2026-09-09-screen-beam-clamp-design.md`](../../docs/superpowers/specs/2026-09-09-screen-beam-clamp-design.md)。
 
-触屏面 **258×168**，大于 X1C 床，托盘拆两半。侧挡内沿间距等于玻璃宽（略大）。上边开口滑入；背面顶条把 U 收成矩形，接到竖脊。抱箍倒 U、沿梁两端开口，不包弓底。
+触屏面 **258×168**，大于 X1C 床，托盘拆两半。左右平框中线对缝，都拧到单独打印的中间竖条上：外沿挡玻璃、中间镂空嵌 4–5 mm 钢板。抱箍再拧竖条。框板与竖条背面朝床平打，挡板朝上。
 
-耗材同样 **PETG-CF** / **0.6 mm**。托盘两半槽口朝上平打；抱箍贴合面朝上或侧立，顶丝孔水平打。
+耗材同样 **PETG-CF** / **0.6 mm**。托盘两半槽口朝上平打；竖条平打；抱箍贴合面朝上或侧立，顶丝孔水平打。
 
 ```bash
 cd hardware/n117m/scad
 openscad -o ../stl/beam_clamp.stl    -D 'part="clamp"'  52_beam_clamp.scad
+openscad -o ../stl/beam_saddle.stl   -D 'part="saddle"' 52_beam_clamp.scad
+openscad -o ../stl/beam_bar.stl      -D 'part="bar"'    52_beam_clamp.scad
 openscad -o ../stl/screen_tray_l.stl -D 'part="tray_l"' 52_beam_clamp.scad
 openscad -o ../stl/screen_tray_r.stl -D 'part="tray_r"' 52_beam_clamp.scad
 ```
 
-看形状：打开 `52_beam_clamp.scad`（默认 `preview`，玻璃和钢板两个立方体套在框里）。总装 `10_layout.scad` 的 `part="screen"`。
+看形状：打开 `52_beam_clamp.scad`（默认 `preview` 是拼好的总装，鞍按 −45°；`part="explode"` 拆开摆）。总装打开 `10_layout.scad`（默认已含框托与横梁抱箍）。
 
-底、顶拼缝各 2×M3；抱箍骑竖脊 2×M3；横梁左右 2×M4 顶丝 + 尼龙垫。
+屏支架一律 **M3×30 外六角 + 螺母**（框–条 4 + 座板 2 + 铰链 2）；螺母沉窝，余牙出背面。横梁左右 2×M4 顶丝 + 尼龙垫。
 
 ## 装配
 

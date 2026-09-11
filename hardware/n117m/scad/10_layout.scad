@@ -1,8 +1,8 @@
 // N-117M 总体布局示意
 //
-// 镜臂见 20_arm.scad（后表面圆角 + 右视 C 形）。主板盒见 50/51。屏支架 52。
+// 镜臂见 20_arm.scad（C 形肩接到后表面，梁梢连观察室/转换器）。主板盒见 50/51。屏支架 52。
 // 坐标：z=0 桌面；+Y 朝目镜（前）；+X 朝右。
-// part：arm | all | body | drive | box | screen
+// 默认 part="all"：臂 + 盒抱箍 + 屏框托/横梁抱箍。part：all | arm | body | drive | box | screen
 
 use <20_arm.scad>
 use <40_stage.scad>
@@ -10,7 +10,7 @@ use <50_board_box.scad>
 use <51_arm_clamp.scad>
 use <52_beam_clamp.scad>
 
-part = "box"; // arm | all | body | drive | box | screen
+part = "all"; // all | arm | body | drive | box | screen
 
 $fn = 40;
 
@@ -219,17 +219,32 @@ module electronics_tray() {
 }
 
 /**
- * 屏支架示意：骑坐横梁中段（z≈338，避开观察室头端锁紧螺丝）。
- * 托盘局部 Y 沿屏高、+Z 朝玻璃；转 45° 使屏后仰约 45°、面向 +Y。
+ * 屏支架：上边碰到三目筒近侧（直径 42），下边落在横梁附近。
+ * rotate([45,0,0]) 后屏顶 (0, face_h, 0) 落到触点；倾角 cm 级，铰链再调。
  */
-beam_z = 338;
+screen_face_h = 168.0;
+screen_tilt   = 45.0;
 
 module n117m_screen_placed() {
-    yb = y_back(beam_z);
-    yf = y_front(beam_z);
-    translate([0, (yb + yf) / 2 + 55, beam_z - 90])
-        rotate([45, 0, 0])
-            beam_clamp_preview();
+    cy = screen_contact_y();
+    cz = screen_contact_z();
+    translate([
+        0,
+        cy - screen_face_h * cos(screen_tilt),
+        cz - screen_face_h * sin(screen_tilt)
+    ])
+        rotate([screen_tilt, 0, 0])
+            beam_clamp_assembled();
+}
+
+/**
+ * 总览：铸造臂 + 臂后盒抱箍 + 屏框托/横梁抱箍。打开本文件默认就是这个。
+ */
+module n117m_overview() {
+    arm_casting();
+    n117m_arm_clamp_placed();
+    n117m_board_box_placed();
+    n117m_screen_placed();
 }
 
 if (part == "arm") {
@@ -248,14 +263,7 @@ else if (part == "box") {
     n117m_board_box_placed();
 }
 else if (part == "screen") {
-    arm_casting();
-    n117m_arm_clamp_placed();
-    n117m_board_box_placed();
-    n117m_screen_placed();
+    n117m_overview();
 }
-else {
-    body_simple();
-    n117m_arm_clamp_placed();
-    n117m_board_box_placed();
-    n117m_screen_placed();
-}
+else
+    n117m_overview();

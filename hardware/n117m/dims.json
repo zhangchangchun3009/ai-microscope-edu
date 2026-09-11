@@ -67,7 +67,7 @@
     "motor_pulley_od": 12.2
   },
   "arm": {
-    "width_column": 62.0,
+    "width_column": 57.5,
     "width_base_flare": 74.0,
     "r_rear": 3.0,
     "r_front": 5.0,
@@ -75,13 +75,7 @@
     "back_y_column": -108.0,
     "dovetail_w": 22.0,
     "dovetail_depth": 6.0,
-    "handle": {
-      "cy": -68.0,
-      "cz": 215.0,
-      "ry": 14.0,
-      "rz": 42.0
-    },
-    "note": "前缘（载物台侧）为 C 弧，背面近乎直线、后棱小圆角约 3mm。正视目镜时右侧手轮在 −X。轮廓按照片比例，位置以卡尺为准。"
+    "note": "立柱与横梁卡尺同宽 57.5（抱箍以上不再上小下大）；底座根部放宽。前缘直线、背面竖直。立柱无提手通孔。横梁与后表面圆角接合。正视目镜时右侧手轮在 −X。"
   },
   "stage": {
     "plate_xy": [132, 142],
@@ -117,7 +111,7 @@
     "vent_pitch": 6.0,
     "m3_through": 3.2,
     "m3_tap_d": 2.4,
-    "standoff_h": 6.0,
+    "standoff_h": 8.0,
     "standoff_d": 10.0,
     "standoff_tap": 2.4,
     "standoff_axis": "y",
@@ -153,7 +147,7 @@
       "pocket_depth": 4.0,
       "screw_faces": "inside"
     },
-    "note": "局部：中心原点，+Y 朝臂，+Z 接口朝上。竖盒元件朝盖，接口 X 相对旧抽屉取负。四角距边 4mm（原 inset=5-1）；靠 USB2 柱心到开口外边 4.25mm；靠接口支柱距顶墙内表面 4mm、柱 φ10 切入约 1mm；pcb_z=10。顶面孔 Y 从后壁内侧起（原法兰 z=0），USB3 孔心 23.8 下沿比螺柱顶高约 1.8mm。无 USB 凸盖。PETG-CF 0.6mm 喷嘴。"
+    "note": "局部：中心原点，+Y 朝臂，+Z 接口朝上。竖盒元件朝盖，接口 X 相对旧抽屉取负。四角距边 4mm（原 inset=5-1）；靠 USB2 柱心到开口外边 4.25mm；靠接口支柱距顶墙内表面 4mm、柱 φ10 切入约 1mm；pcb_z=10。顶面孔 Y 从后壁内侧起（原法兰 z=0=底板底面），支柱高 8=原 3mm 底板+5mm 柱。无 USB 凸盖。PETG-CF 0.6mm 喷嘴。"
   },
   "arm_clamp": {
     "arm_w_caliper": 57.5,
@@ -179,6 +173,8 @@
     "face_wh": [258.0, 168.0],
     "glass_t": 2.3,
     "steel_proud": 4.0,
+    "steel_pocket_d": 5.0,
+    "steel_clear": 2.0,
     "steel_inset_tb": 13.0,
     "steel_inset_lr": [13.0, 17.0],
     "edge_clear": 0.4,
@@ -186,8 +182,9 @@
     "baffle_side": 3.5,
     "baffle_bottom": 10.0,
     "baffle_bottom_deg": 60.0,
+    "outer_extra": 4.0,
     "cable": "top_center_mipi",
-    "note": "侧挡内沿间距=玻璃宽+两侧间隙。不向开孔内翻边。后窗按较小侧边距 13 居中。"
+    "note": "左右平框中线对缝、互不重叠；各拧到单独打印的中间竖条。外沿挡玻璃，镂空嵌满 4–5 mm 钢板。"
   },
   "beam_clamp": {
     "beam_w_caliper": 57.5,
@@ -195,16 +192,40 @@
     "print_clear": 1.5,
     "wall": 6.0,
     "len_along": 40.0,
-    "wrap_down": 22.0,
+    "wrap_down": 15.0,
     "wrap_bottom": false,
     "m4_tap_d": 3.6,
     "set_screws": 2,
     "m3_through": 3.2,
+    "m3_hex_len": 30,
+    "m3_nut_af": 5.5,
+    "m3_nut_h": 2.4,
+    "m3_nut_pocket_clear": 0.4,
+    "m3_nut_pocket_d": 3.0,
+    "bar_w": 22.0,
     "standoff": 45.0,
     "slide_slot": 30.0,
     "tilt_from_vert": 45.0,
+    "tilt_range": 25.0,
+    "tongue_r": 16.0,
+    "tongue_t": 5.4,
+    "ear_t": 6.0,
+    "arc_r": 11.0,
     "open_toward": "arm",
-    "beam_angle_est": 110.0,
-    "note": "U 框背面加顶条成矩形，顶条接竖脊。倒 U 沿梁两端开口。"
+    "beam_angle_est": 20.1,
+    "note": "座板夹耳 + 倒 U 圆舌。下包 ≤17（梁面到弓顶）。倾角由横梁 98/92 算出约 20°，铰链再吃误差。"
+  },
+  "cross_beam": {
+    "width": 57.5,
+    "wrap_max": 17.0,
+    "join_z": 240.0,
+    "hyp": 98.0,
+    "horiz": 92.0,
+    "axis_from_back": 135.0,
+    "tube_d_contact": 42.0,
+    "contact_z": 378.0,
+    "bow_r": 90.0,
+    "error_cm": true,
+    "note": "顶面从臂背面斜出（钝角约 110°，圆角接合）。E1 宽 57.5。E2 弓顶到梁面 17。接合 z=240 在后表面；斜边 98、水平 92。梁梢接到观察室座与物镜转换器。"
   }
 }

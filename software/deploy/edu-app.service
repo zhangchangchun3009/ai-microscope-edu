@@ -8,9 +8,14 @@ Conflicts=scandog.service mipi-hmi.service edu-kiosk-probe.service
 Type=simple
 User=cat
 Group=cat
-SupplementaryGroups=video render input
+SupplementaryGroups=video render input audio
 WorkingDirectory=/home/cat/ai-microscope-edu/software
 Environment=PYTHONUNBUFFERED=1
+Environment=EDU_SENSEVOICE_DEMO=/home/cat/ai-microscope-edu/models/sensevoice/sensevoice_demo
+Environment=EDU_SENSEVOICE_MODEL=/home/cat/ai-microscope-edu/models/sensevoice/sensevoice_f32.rknn
+Environment=EDU_SENSEVOICE_TOKENS=/home/cat/ai-microscope-edu/models/sensevoice/tokens.txt
+Environment=EDU_TTS_MODEL_DIR=/home/cat/ai-microscope-edu/models/matcha-icefall-zh-baker
+Environment=EDU_TTS_VOCODER=/home/cat/ai-microscope-edu/models/vocos-22khz-univ.onnx
 # Mesa 缺 EGL_EXT_device_base，eglfs_kms 会 ABRT。先走 linuxfb 运行教学壳。
 # 后续接通硬件加速时再验证 Mali GBM + eglfs（见 README）。
 Environment=QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0

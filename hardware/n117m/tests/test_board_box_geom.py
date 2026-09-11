@@ -182,15 +182,21 @@ class TestSpeakerAndVents(unittest.TestCase):
         self.assertIn("function y_pcb() = -outer_y / 2 + wall;", y_fn)
         self.assertNotIn("wall + standoff_h", y_fn.split("function y_pcb()")[1][:80])
 
-    def test_usb3_bottom_is_1_to_2_mm_above_standoffs(self):
-        """原底座实物：USB 下沿比螺柱顶只高 1–2 mm。"""
+    def test_standoff_h_matches_old_tray_deck_plus_boss(self):
+        """原抽屉法兰底 z=0 是 3mm 底板底面；柱在板顶上 h=5，焊盘距开孔基准 8mm。
+
+        开孔已按法兰底抄（USB3 心 23.8）。柱只有 6mm 时孔位对、板悬空。
+        """
         b = DIMS["board_box"]
+        self.assertEqual(b["standoff_h"], 8.0)
         usb3 = next(p for p in b["ports"] if p["name"] == "usb3")
-        bottom = usb3["y_from_pcb"] - usb3["wh"][1] / 2.0
-        gap = bottom - b["standoff_h"]
-        self.assertAlmostEqual(gap, 1.8, places=1)
-        self.assertGreaterEqual(gap, 1.0)
-        self.assertLessEqual(gap, 2.5)
+        usb2 = next(p for p in b["ports"] if p["name"] == "usb2")
+        usb3_bottom = usb3["y_from_pcb"] - usb3["wh"][1] / 2.0
+        usb2_bottom = usb2["y_from_pcb"] - usb2["wh"][1] / 2.0
+        self.assertAlmostEqual(usb3_bottom - b["standoff_h"], -0.2, places=1)
+        self.assertAlmostEqual(usb2_bottom - b["standoff_h"], 1.05, places=2)
+        text = (SCAD / "50_board_box.scad").read_text(encoding="utf-8")
+        self.assertIn("standoff_h = 8.0", text)
 
     def test_vent_width_for_0_6_nozzle(self):
         self.assertEqual(DIMS["board_box"]["vent_w"], 2.4)
@@ -235,7 +241,7 @@ class TestLidBoltNutAndSelfTap(unittest.TestCase):
 
     def test_clamp_plate_and_pcb_are_self_tap(self):
         self.assertEqual(DIMS["board_box"]["standoff_tap"], m3_self_tap_d())
-        self.assertGreaterEqual(DIMS["board_box"]["standoff_h"], 6.0)
+        self.assertGreaterEqual(DIMS["board_box"]["standoff_h"], 8.0)
         lid = _scad_module("clamp_holes_in_lid")
         self.assertIn("m3_through", lid)
         clamp = (SCAD / "51_arm_clamp.scad").read_text(encoding="utf-8")
@@ -262,7 +268,7 @@ class TestClamp(unittest.TestCase):
         holes = mount_hole_xy(c["plate_pitch"])
         self.assertEqual(len(holes), 4)
         self.assertIn((-20.0, -20.0), holes)
-        self.assertEqual(DIMS["arm"]["width_column"], 62.0)
+        self.assertEqual(DIMS["arm"]["width_column"], 57.5)
 
     def test_clamp_sits_above_z_knobs(self):
         z0 = DIMS["arm_clamp"]["z0"]

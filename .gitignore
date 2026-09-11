@@ -13,6 +13,9 @@ software/.venv/
 # 教学应用运行时数据
 software/var/
 
+# 板端语音模型（SenseVoice RKNN / Matcha ONNX），体积大，只存在于 211
+models/
+
 # Python
 **/__pycache__/
 .pytest_cache/

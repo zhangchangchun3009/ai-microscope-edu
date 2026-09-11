@@ -51,6 +51,24 @@ def test_hit_button_keeps_press_during_drag(app: QApplication) -> None:
     assert fab.hitButton(QPoint(-100, -100)) is True
 
 
+def test_cancel_ptt_resets_state_and_emits_off(app: QApplication) -> None:
+    """外部收尾复位 PTT：清状态并只发一次 False，重复调用不再发。"""
+    parent = QWidget()  # 保留引用：父被 GC 会连带析构 C++ 子对象
+    fab = AiFab(parent)
+    seen: list[bool] = []
+    fab.ptt_changed.connect(seen.append)
+    fab._ptt_on = True
+
+    fab.cancel_ptt()
+
+    assert fab._ptt_on is False
+    assert seen == [False]
+
+    fab.cancel_ptt()
+
+    assert seen == [False]
+
+
 def test_drag_release_emits_persist_signal_without_click(app: QApplication) -> None:
     """拖动抬手应请求持久化，但不得发出按钮 clicked。"""
     fab = AiFab(QWidget())

@@ -21,7 +21,7 @@ ffc_w = 17.2;
 vent_w = 2.4;
 vent_pitch = 6.0;
 m3_through = 3.2;
-standoff_h = 6.0;
+standoff_h = 8.0;
 standoff_d = 10.0;
 standoff_tap = 2.4;
 pcb_z = 10.0;
@@ -39,8 +39,8 @@ spk_slot = [12.0, 4.0];
 spk_boss_t = 5.0;
 spk_pocket_d = 4.0;
 
-// 顶面孔：X 相对旧抽屉取负。y_from_pcb 从后壁内侧起（原法兰底 z=0），不加支柱高。
-// USB3 孔心 23.8 = 原抽屉 local_z_usb+6；下沿约比螺柱顶高 1.8 mm。
+// 顶面孔：X 相对旧抽屉取负。y_from_pcb 从后壁内侧起（原法兰底 z=0 = 3mm 底板底面）。
+// USB3 孔心 23.8 = 原抽屉 local_z_usb+6。支柱高 8 = 原 3mm 底板 + 5mm 柱，不要再把柱高叠进孔位。
 // [name, x, y_from_pcb, kind, d_or_w, h]
 ports = [
     ["dc",     62.0, 12.5, "circle", 8.0,  0],
@@ -59,7 +59,7 @@ inner_y = outer_y - wall - lid_t;
 inner_z = outer_z - 2 * wall;
 
 /**
- * 顶面孔 Y 基准：后壁内侧。与原抽屉法兰底 z=0 相同，不要加支柱高。
+ * 顶面孔 Y 基准：后壁内侧。与原抽屉法兰底 z=0（底板底面）相同，不要加支柱高。
  */
 function y_pcb() = -outer_y / 2 + wall;
 

@@ -107,12 +107,12 @@ def port_fit_clip_z(
 
 
 def y_port_datum(outer_y: float, wall: float) -> float:
-    """顶面孔 Y 基准：后壁内侧，与原抽屉法兰底 z=0 相同。不要加支柱高。"""
+    """顶面孔 Y 基准：后壁内侧，与原抽屉法兰底 z=0（3mm 底板底面）相同。不要加支柱高。"""
     return -outer_y / 2.0 + wall
 
 
 def y_solder_plane(outer_y: float, wall: float, standoff_h: float) -> float:
-    """焊盘平面局部 Y：后壁内侧 + 支柱高。板坐在这里，开孔不从这里起算。"""
+    """焊盘平面局部 Y：后壁内侧 + 支柱高（原 3+5=8 mm）。开孔不从这里起算。"""
     return y_port_datum(outer_y, wall) + standoff_h
 
 

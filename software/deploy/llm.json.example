@@ -1,0 +1,8 @@
+{
+  "base_url": "https://api.example.com/v1",
+  "api_key": "sk-replace-me",
+  "model": "qwen-plus",
+  "timeout_secs": 30,
+  "device_secret": "Microclaw-2026-SuperSecr3t!",
+  "device_secret_hosts": ["www.aiinstrum.com"]
+}
