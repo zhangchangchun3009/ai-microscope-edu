@@ -16,6 +16,9 @@ software/var/
 # 板端语音模型（SenseVoice RKNN / Matcha ONNX），体积大，只存在于 211
 models/
 
+# 本地 SDD 草稿，不进远程仓
+.superpowers/
+
 # Python
 **/__pycache__/
 .pytest_cache/
