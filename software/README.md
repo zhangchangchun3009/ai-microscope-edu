@@ -74,7 +74,7 @@ cp deploy/llm.json.example var/qa/llm.json
 
 | 变量 | 板上缺省 |
 |------|------|
-| `EDU_SENSEVOICE_DEMO` | `models/sensevoice/sensevoice_demo`（同目录 `lib/` 为 `$ORIGIN/lib`） |
+| `EDU_SENSEVOICE_DEMO` | `models/sensevoice/sensevoice_demo`（同目录 `lib/` 为 `$ORIGIN/lib`；还要有 `model/am.mvn`，否则 demo 仍 exit 0 但无 `Output:`） |
 | `EDU_SENSEVOICE_MODEL` | `models/sensevoice/sensevoice_f32.rknn` |
 | `EDU_SENSEVOICE_TOKENS` | `models/sensevoice/tokens.txt` |
 | `EDU_TTS_MODEL_DIR` | `models/matcha-icefall-zh-baker` |

@@ -36,6 +36,7 @@ GATE_HANG_S = 0.12
 
 # 板上模型只放本应用目录，运行时不要再指向 /home/cat/microscope/（旧树可能被删）。
 # Mac 上这些文件不存在：ASR 返回 ""，TTS 回退 MockTts。可用 EDU_* 覆盖。
+# sensevoice_demo 的 cwd 是其父目录，还必须有 model/am.mvn（CMVN），缺了会识别为空。
 _MODELS_ROOT = "/home/cat/ai-microscope-edu/models"
 SENSEVOICE_DEMO = os.environ.get(
     "EDU_SENSEVOICE_DEMO",
