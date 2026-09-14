@@ -1,6 +1,6 @@
 # 教学一体机设置（壳 + 立刻旋转 + 语音配置）
 
-> 状态：按 2026-09-14 审阅意见修订，待再确认  
+> 状态：已批准（2026-09-14）；实现计划 [`../plans/2026-09-14-edu-settings.md`](../plans/2026-09-14-edu-settings.md)  
 > 产品计划：[`../../plans/2026-09-07-ai-camera-closed-loop-plan.md`](../../plans/2026-09-07-ai-camera-closed-loop-plan.md)  
 > UI 总规：[`2026-09-08-edu-kiosk-ui-design.md`](2026-09-08-edu-kiosk-ui-design.md) §4 / §8  
 > 语音回合：[`2026-09-10-voice-qa-turn-design.md`](2026-09-10-voice-qa-turn-design.md)  
@@ -244,4 +244,4 @@ venv 增加 `ruamel.yaml`、`cryptography`（AES-GCM）。不要在设置页拼 
 
 ## 13. 非目标
 
-ISP、配网、关机、知识库、识图、改分句水位、混音器通路进设置、linuxfb 重启旋转、把算法参数合并进 `edu.yaml`、MicroClaw `.secret_key` / `enc2` 格式。
+ISP、配网、关机、知识库、识图、改分句水位、混音器通路进设置、linuxfb 重启旋转、藏工具条再滑出半屏设置、把算法参数合并进 `edu.yaml`、MicroClaw `.secret_key` / `enc2` 格式。
