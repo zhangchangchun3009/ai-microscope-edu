@@ -120,8 +120,10 @@ def test_playback_upmixes_mono_and_uses_stereo_aplay(monkeypatch) -> None:
     assert kwargs["timeout"] == max(20.0, 10.0 + 12.0)
 
 
-def test_playback_overrides_aplay_rate_and_keeps_stereo_upmix(monkeypatch) -> None:
-    """TTS 一句是 22050；覆盖 -r 后仍须左右复制，超时按覆盖采样率计。"""
+def test_playback_resamples_tts_rate_to_device_rate(monkeypatch) -> None:
+    """ES8388 不能装 22050 hw params；TTS 先重采样到 44100 再立体声 aplay。"""
+    from voice.asr import resample_pcm
+
     tts_rate = 22050
     pcm = b"\0" * (tts_rate * 2 * 10)
     run_calls: list[tuple[list[str], dict[str, object]]] = []
@@ -134,10 +136,12 @@ def test_playback_overrides_aplay_rate_and_keeps_stereo_upmix(monkeypatch) -> No
 
     assert AlsaPlayback().play_pcm(pcm, sample_rate=tts_rate) is True
     argv, kwargs = run_calls[0]
-    assert argv[argv.index("-r") + 1] == "22050"
+    assert argv[argv.index("-r") + 1] == str(SAMPLE_RATE)
     assert argv[argv.index("-c") + 1] == str(PLAYBACK_CHANNELS)
-    assert kwargs["input"] == upmix_mono_to_stereo(pcm)
-    assert kwargs["timeout"] == max(20.0, 10.0 + 12.0)
+    expected = upmix_mono_to_stereo(resample_pcm(pcm, tts_rate, SAMPLE_RATE))
+    assert kwargs["input"] == expected
+    duration_s = len(expected) / float(SAMPLE_RATE * PLAYBACK_CHANNELS * 2)
+    assert kwargs["timeout"] == max(20.0, duration_s + 12.0)
 
 
 def test_build_audio_io_uses_alsa_when_both_tools_exist(monkeypatch) -> None:

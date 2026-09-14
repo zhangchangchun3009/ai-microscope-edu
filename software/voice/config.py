@@ -8,8 +8,14 @@ import os
 SAMPLE_RATE = 44100
 # SenseVoice 只要 16 kHz；不要把 ALSA 采/播改成这个速率。
 ASR_RATE = 16000
-# Matcha 原生 22050。一句 PCM 交给 aplay 时覆盖 -r，不要把采集改成这个。
+# Matcha 原生 22050。一句 PCM 交给 aplay 前重采样到 44100，不要把采集改成这个。
 TTS_RATE = 22050
+# 喇叭 TTS 相对 Matcha 满幅的线性增益；beep 不走这个系数。
+TTS_GAIN = 0.5
+# 未播 PCM 句数上限，合成线程领先播放，减少句间静音。
+TTS_PCM_PREFETCH = 3
+# 合成与 aplay 重叠时少占核，避免把播放饿死。
+TTS_NUM_THREADS = 2
 CHANNELS = 1
 PLAYBACK_CHANNELS = 2
 ECHO_TARGET_PEAK = 12000

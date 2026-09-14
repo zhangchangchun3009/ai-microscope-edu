@@ -40,7 +40,7 @@ ASR / TTS 照搬旧板端。本刀增量：**流式问答 + 分句队列 + 按�
 2. 组消息同旧 qa 槽：短 system（生物学 + `{datetime}` + 可选 USER.md）→ 历史 → 本轮 user（KB 块本刀为空）。超时默认 **30 s**（10–600）。流式失败则非流式回退；两种结果都进入同一套分句播放。失败 / 超时且尚无已播句子 → beep，不写 assistant。若已播出部分句子再失败：停队列、不写 assistant（避免半句进历史），浮标恢复。
 3. **分句 → 队列（生产）**：token 遇到 `。！？!?` 或换行则切出一句（标点留在句尾）。不要按逗号切。流结束或非流式全文到达后，剩余缓冲非空也入队。
 4. **短句合并（减少误切）**：入队前若本句去掉空白和句末标点后 **少于 8 字**，且队列里或后续还能接到下一句，则与下一句拼成一句再入队（例如「好。」+「这是洋葱表皮。」）。流已结束且只剩这一短句，则照播，不再等。
-5. **消费（TTS）**：未播句 **≥ 2** 才开始第一句 `aplay`；生成已结束则有一句就播（避免只有一句时卡死）。播放期间尽量让队列里维持 **2～3** 句未播：模型快、TTS 慢时队列可以超过 3（全文都留下，**不丢句**）；TTS 快、模型慢时队列空了就等下一句，允许句间短暂静音，不要把未完成的缓冲拿去合成。一句 Matcha → 22050 → 立体声 `aplay`，**播完再取下一句**。单句失败：beep、丢弃未播句。
+5. **消费（TTS）**：未播句 **≥ 2** 才把句子交给合成线程；合成与 `aplay` 分线程重叠，PCM 预取最多 3 句。喇叭串行不叠音。开播前 Matcha 在应用启动时后台预热。一句 Matcha → 22050 → 重采样 44100 → 音量 `TTS_GAIN` → 立体声 `aplay`。单句失败：beep、丢弃未播句。
 
 6. 队列播完（或按上款失败）后：仅当流/回退 **完整成功** 时把整段 assistant 原文写入历史。空闲，浮标恢复。
 
@@ -48,11 +48,7 @@ ASR / TTS 照搬旧板端。本刀增量：**流式问答 + 分句队列 + 按�
 
 关窗 `abort()`：停录或放弃回合（不承诺杀掉 HTTP），停当前 `aplay`，清空未播句，恢复浮标。
 
-实现状态（2026-09-10）：`abort()` 不分相位置位一个 `threading.Event`，回合循环在每次
-`synthesize` / `play_pcm` 前检查并收手（返回 `aborted`，不 beep、不写 assistant）；关窗对工作
-线程 `join(timeout=PTT_JOIN_TIMEOUT_S)`。**已经交给 `aplay` 的那一句仍会播完**——中断在播进程
-需要把 `subprocess.run` 换成 `Popen` + `terminate`，留作后续。自动收尾（300 s / 3 s 无数据）
-禁用浮标前必须调 `AiFab.cancel_ptt()`：Qt 不向禁用控件派发 release，否则 PTT 高亮会卡住。
+实现状态（2026-09-11）：`abort()` 不分相位置位一个 `threading.Event`；合成/播放分线程，取消后不再合成新句。关窗对工作线程 `join(timeout=PTT_JOIN_TIMEOUT_S)`。**已经交给 `aplay` 的那一句仍会播完**。TTS 线性增益 `TTS_GAIN=0.5`。应用启动预热 Matcha。
 
 ## 4. 模块
 
@@ -60,13 +56,14 @@ ASR / TTS 照搬旧板端。本刀增量：**流式问答 + 分句队列 + 按�
 |------|------|
 | `voice/asr.py` | 16 kHz、`sensevoice_demo`、`Output:`、PTT 尾部清理 |
 | `voice/tts.py` | 一句文本→PCM（Matcha 22050 s16le；无 sherpa 则 Mock）。不直接 `aplay` |
-| `voice/alsa.py` | `play_pcm(pcm, sample_rate=None)` 覆盖 aplay `-r`，仍先升混立体声 |
+| `voice/alsa.py` | `play_pcm(pcm, sample_rate=)`：PCM 速率若不是 44100 则先重采样，再立体声 aplay |
 | `qa/sentences.py` | 流式增量分句、短句合并、开播水位（纯函数/小队列，便于测） |
 | `qa/prompt.py` | system / 可选 KB 前缀 / user |
 | `qa/knowledge.py` | `KnowledgeRecall` + `EmptyRecall` |
 | `qa/client.py` | SSE 流式；失败则非流式；`enable_thinking=false`；白名单 host 附加 `X-Device-Secret` |
 | `qa/session.py` | 8 轮记忆、20 分钟切场 |
-| `voice/session.py` | 判定后调度；按句调用 TTS+播放 |
+| `voice/pipeline.py` | 句文本 → 合成线程 / aplay 线程重叠；PCM 预取 |
+| `voice/session.py` | 判定后调度；水位后把句子交给 SentencePlayer |
 | `app/` | PTT；工作线程；按 busy 禁用浮标 |
 
 配置：ASR/TTS 路径对齐现网。LLM：`var/qa/llm.json` + `EDU_LLM_*`。缺配置 → beep。自建 nginx 网关对照 MicroClaw：请求 URL host 命中白名单时附加 `X-Device-Secret`。不引入 MCP SDK。SSE 可用标准库读 chunk，若实现时过痛再加一个轻量 HTTP 依赖（计划里写明）。

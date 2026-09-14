@@ -144,7 +144,7 @@ class SherpaTts:
         self._sherpa = sherpa_onnx
         self._speed = 1.0
         self._provider = "cpu"
-        self._num_threads = 4
+        self._num_threads = int(voice_config.TTS_NUM_THREADS)
         self._tts = self._load_matcha(sherpa_onnx)
 
     def _load_matcha(self, sherpa_onnx: Any) -> Any:

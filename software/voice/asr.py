@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import logging
 import re
-import struct
 import subprocess
 from pathlib import Path
 from typing import Callable
 
 from voice import config as voice_config
 from voice.config import ASR_RATE, ASR_TIMEOUT_S, SAMPLE_RATE
-from voice.wavutil import pcm_to_wav, wav_to_pcm
+from voice.wavutil import pcm_to_wav, resample_pcm, wav_to_pcm
 
 _LOG = logging.getLogger(__name__)
-_BYTES_PER_SAMPLE = 2
 _OUTPUT_PREFIX = "Output:"
 _LAST_16K_NAME = "last_16k.wav"
 # 对照 microscope/python/common/sensevoice_asr.py，不 import microscope。
@@ -31,45 +29,6 @@ __all__ = [
     "resample_pcm",
     "transcribe_wav",
 ]
-
-
-def resample_pcm(pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
-    """将 int16 LE 单声道 PCM 线性插值重采样。
-
-    参数:
-        pcm: 16-bit 小端单声道 PCM。
-        src_rate: 源采样率（Hz）。
-        dst_rate: 目标采样率（Hz）。
-
-    返回:
-        重采样后的 PCM。空输入或非法采样率返回空字节；源/目标相同则原样返回。
-
-    副作用:
-        无。
-    """
-    if not pcm or src_rate <= 0 or dst_rate <= 0:
-        return b""
-    n_src = len(pcm) // _BYTES_PER_SAMPLE
-    if n_src == 0:
-        return b""
-    if src_rate == dst_rate:
-        return pcm[: n_src * _BYTES_PER_SAMPLE]
-    samples = struct.unpack_from("<" + "h" * n_src, pcm)
-    n_dst = int(round(n_src * dst_rate / src_rate))
-    if n_dst <= 0:
-        return b""
-    last = n_src - 1
-    out: list[int] = []
-    for i in range(n_dst):
-        src_index = i * src_rate / dst_rate
-        left = int(src_index)
-        if left >= last:
-            out.append(samples[last])
-            continue
-        frac = src_index - left
-        interpolated = samples[left] * (1.0 - frac) + samples[left + 1] * frac
-        out.append(int(max(-32768, min(32767, round(interpolated)))))
-    return struct.pack("<" + "h" * n_dst, *out)
 
 
 def extract_sensevoice_output_text(stdout_text: str) -> str | None:

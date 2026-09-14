@@ -15,7 +15,7 @@ from voice.config import (
     PLAYBACK_CHANNELS,
     SAMPLE_RATE,
 )
-from voice.wavutil import upmix_mono_to_stereo
+from voice.wavutil import resample_pcm, upmix_mono_to_stereo
 
 _LOG = logging.getLogger(__name__)
 _STDERR_TAIL_BYTES = 4096
@@ -66,7 +66,8 @@ class AudioPlayback(Protocol):
 
         参数:
             pcm: 待播放的 16-bit LE PCM 字节。
-            sample_rate: 覆盖 aplay ``-r``；缺省用构造时的采样率。
+            sample_rate: PCM 自身采样率。芯片只吃 44100，不等于设备采样率时
+                先线性重采样再 aplay，不要把 22050 硬灌进 ``hw:0,0``。
 
         返回:
             播放成功返回 True，否则返回 False。
@@ -292,8 +293,8 @@ class AlsaPlayback:
 
         参数:
             pcm: 待播放的单声道 PCM 字节。
-            sample_rate: 覆盖 aplay ``-r`` 与超时估算；缺省 ``self._sample_rate``。
-                TTS 一句为 22050，回放原声仍用 44100。
+            sample_rate: PCM 自身采样率；缺省 ``self._sample_rate``（44100）。
+                TTS 一句为 22050，会先重采样到设备速率再升混。
 
         返回:
             播放成功返回 True；启动失败、超时或退出码非零返回 False。
@@ -303,7 +304,12 @@ class AlsaPlayback:
         """
         if not pcm:
             return True
-        rate = int(sample_rate or self._sample_rate)
+        pcm_rate = int(sample_rate or self._sample_rate)
+        device_rate = self._sample_rate
+        if pcm_rate != device_rate:
+            pcm = resample_pcm(pcm, pcm_rate, device_rate)
+            if not pcm:
+                return False
         # 会话层始终给出单声道 PCM；芯片按立体声帧取数，这里升混后再播。
         play_pcm = upmix_mono_to_stereo(pcm) if self._channels == 2 else pcm
         cmd = [
@@ -314,13 +320,13 @@ class AlsaPlayback:
             "-f",
             "S16_LE",
             "-r",
-            str(rate),
+            str(device_rate),
             "-c",
             str(self._channels),
             "-t",
             "raw",
         ]
-        byte_rate = rate * self._channels * 2
+        byte_rate = device_rate * self._channels * 2
         duration_s = len(play_pcm) / float(byte_rate)
         timeout_sec = max(20.0, duration_s + 12.0)
         try:

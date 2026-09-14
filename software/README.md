@@ -84,7 +84,7 @@ cp deploy/llm.json.example var/qa/llm.json
 
 在 Mac 仓库的 `ai-microscope-edu/` 下用本文开头「板端路径」一节的 `rsync` 同步（不要重复维护两份命令）。
 
-板上：放入 `var/qa/llm.json`（不要 rsync 覆盖 var）。ASR/TTS 已指向本应用 `models/`，不必再引用旧 `microscope/`。重启后重设混音器（spk / Line 2 / PGA 24dB / Output 拉满）：
+板上：放入 `var/qa/llm.json`（不要 rsync 覆盖 var）。ASR/TTS 已指向本应用 `models/`，不必再引用旧 `microscope/`。重启后重设混音器（spk / Line 2 / PGA 24dB / Output 24，TTS 另有软件增益 0.5）：
 
 ```bash
 sudo systemctl restart edu-app
@@ -93,8 +93,8 @@ amixer -c 0 sset "spk switch" on
 amixer -c 0 sset "Differential Mux" "Line 2"
 amixer -c 0 sset "Left Channel" 8
 amixer -c 0 sset "Right Channel" 8
-amixer -c 0 sset "Output 1" 33
-amixer -c 0 sset "Output 2" 33
+amixer -c 0 sset "Output 1" 24
+amixer -c 0 sset "Output 2" 24
 amixer -c 0 sset PCM 100%
 ```
 

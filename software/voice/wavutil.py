@@ -6,6 +6,11 @@ import math
 import struct
 from typing import Literal
 
+try:
+    import audioop
+except ImportError:  # pragma: no cover — 3.13+ 无 audioop 时走纯 Python。
+    audioop = None  # type: ignore[assignment]
+
 from voice.config import (
     BEEP_AMPLITUDE,
     BEEP_HZ,
@@ -115,6 +120,80 @@ def wav_to_pcm(wav: bytes) -> bytes | None:
             pos += 1
 
     return None
+
+
+def resample_pcm(pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
+    """将 int16 LE 单声道 PCM 线性插值重采样。
+
+    参数:
+        pcm: 16-bit 小端单声道 PCM。
+        src_rate: 源采样率（Hz）。
+        dst_rate: 目标采样率（Hz）。
+
+    返回:
+        重采样后的 PCM。空输入或非法采样率返回空字节；源/目标相同则原样返回。
+
+    副作用:
+        无。
+    """
+    if not pcm or src_rate <= 0 or dst_rate <= 0:
+        return b""
+    n_src = len(pcm) // _BYTES_PER_SAMPLE
+    if n_src == 0:
+        return b""
+    if src_rate == dst_rate:
+        return pcm[: n_src * _BYTES_PER_SAMPLE]
+    raw = pcm[: n_src * _BYTES_PER_SAMPLE]
+    if audioop is not None:
+        converted, _state = audioop.ratecv(raw, 2, 1, src_rate, dst_rate, None)
+        return converted
+    samples = struct.unpack_from("<" + "h" * n_src, pcm)
+    n_dst = int(round(n_src * dst_rate / src_rate))
+    if n_dst <= 0:
+        return b""
+    last = n_src - 1
+    out: list[int] = []
+    for i in range(n_dst):
+        src_index = i * src_rate / dst_rate
+        left = int(src_index)
+        if left >= last:
+            out.append(samples[last])
+            continue
+        frac = src_index - left
+        interpolated = samples[left] * (1.0 - frac) + samples[left + 1] * frac
+        out.append(int(max(-32768, min(32767, round(interpolated)))))
+    return struct.pack("<" + "h" * n_dst, *out)
+
+
+def scale_pcm(pcm: bytes, gain: float) -> bytes:
+    """按线性增益缩放 int16 LE PCM。
+
+    参数:
+        pcm: 16-bit 小端 PCM。
+        gain: 乘数；1.0 原样返回。小于 0 按 0 处理。
+
+    返回:
+        缩放后的 PCM；空输入返回空字节。
+
+    副作用:
+        无。
+    """
+    if not pcm:
+        return b""
+    if len(pcm) % _BYTES_PER_SAMPLE:
+        return pcm
+    factor = max(0.0, float(gain))
+    if factor == 1.0:
+        return pcm
+    if audioop is not None:
+        return audioop.mul(pcm, 2, factor)
+    n = len(pcm) // _BYTES_PER_SAMPLE
+    samples = struct.unpack_from("<" + "h" * n, pcm)
+    out = [
+        int(max(-32768, min(32767, round(value * factor))))
+        for value in samples
+    ]
+    return struct.pack("<" + "h" * n, *out)
 
 
 def pcm_duration_s(pcm: bytes, sample_rate: int = SAMPLE_RATE, channels: int = CHANNELS) -> float:

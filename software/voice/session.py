@@ -14,7 +14,8 @@ from qa.sentences import SentenceSplitter, merge_short_sentences, ready_to_play
 from qa.turn import QaService
 from voice.alsa import AudioCapture, AudioPlayback
 from voice.asr import transcribe_wav
-from voice.config import MAX_RECORD_S, NO_DATA_S, TTS_RATE
+from voice.config import MAX_RECORD_S, NO_DATA_S, TTS_GAIN
+from voice.pipeline import SentencePlayer
 from voice.tts import TextToSpeech, build_tts
 from voice.wavutil import classify_utterance, make_beep_pcm, pcm_to_wav
 
@@ -75,10 +76,17 @@ class VoiceSession:
         # 缺省时在首轮懒创建并挂到实例上；每回合 new 会丢掉 8 轮记忆、重载 Matcha。
         self._qa = qa
         self._tts = tts
+        self._tts_lock = threading.Lock()
         self._phase = "idle"
         self._started_at = 0.0
         # 跨线程取消标志：GUI 线程 abort() 置位，工作线程的回合循环据此提前收手。
         self._cancel = threading.Event()
+        if tts is None:
+            threading.Thread(
+                target=self._warmup_tts,
+                name="edu-tts-warmup",
+                daemon=True,
+            ).start()
 
     def start_ptt(self) -> bool:
         """空闲时开始一段 PTT 录音。
@@ -249,9 +257,17 @@ class VoiceSession:
         副作用:
             首次缺省调用会 ``build_tts()`` 并写入 ``self._tts``。
         """
-        if self._tts is None:
-            self._tts = build_tts()
-        return self._tts
+        with self._tts_lock:
+            if self._tts is None:
+                self._tts = build_tts()
+            return self._tts
+
+    def _warmup_tts(self) -> None:
+        """应用启动后预加载 Matcha，避免第一轮开口卡在模型加载。"""
+        try:
+            self._ensure_tts()
+        except Exception:
+            _LOG.exception("TTS 预热失败")
 
     def _run_turn(self) -> StopResult:
         """识别 → 流式分句入队 → 水位到达后按句 TTS。全程成功才写记忆。
@@ -271,9 +287,10 @@ class VoiceSession:
         splitter = SentenceSplitter()
         pending: list[str] = []
         queue: list[str] = []
-        play_index = 0
         started = False
+        submitted = 0
         assistant_parts: list[str] = []
+        player = SentencePlayer(tts, self._playback, self._cancel, gain=TTS_GAIN)
 
         def ingest(parts: list[str], *, producer_done: bool) -> None:
             """合并短句后入队；流未结束时末尾短句留下一拍，等下一句。"""
@@ -292,64 +309,40 @@ class VoiceSession:
                 queue.extend(merged)
                 pending.clear()
 
-        def pump(*, producer_done: bool) -> bool:
-            """水位够了才开播，随后按队列串行 synthesize + play_pcm。
-
-            返回 False 表示中断；取消与失败由调用方查 ``_cancel`` 区分。
-            """
-            nonlocal play_index, started
-            waiting = len(queue) - play_index
+        def flush_to_player(*, producer_done: bool) -> None:
+            """水位够了才把句子交给合成线程；之后随到随交，不再等播完。"""
+            nonlocal started, submitted
             if not started:
-                if not ready_to_play(waiting, producer_done):
-                    return True
+                if not ready_to_play(len(queue), producer_done):
+                    return
                 started = True
-            while play_index < len(queue):
-                if self._cancel.is_set():
-                    return False
-                sentence = queue[play_index]
-                try:
-                    pcm = tts.synthesize(sentence)
-                except Exception:
-                    _LOG.exception("TTS 合成失败")
-                    return False
-                if self._cancel.is_set():
-                    return False
-                if not self._playback.play_pcm(pcm, sample_rate=TTS_RATE):
-                    return False
-                play_index += 1
-            return True
+            while submitted < len(queue):
+                player.submit(queue[submitted])
+                submitted += 1
 
+        stream_error = False
         try:
             for token in qa.iter_tokens(user_text):
                 if self._cancel.is_set():
-                    return "aborted"
+                    break
                 assistant_parts.append(token)
                 ingest(splitter.push(token), producer_done=False)
-                if not pump(producer_done=False):
-                    if self._cancel.is_set():
-                        return "aborted"
-                    self._beep()
-                    return "failed"
-            if self._cancel.is_set():
-                return "aborted"
-            ingest(splitter.finish(), producer_done=True)
-            if not pump(producer_done=True):
-                if self._cancel.is_set():
-                    return "aborted"
-                self._beep()
-                return "failed"
+                flush_to_player(producer_done=False)
+            else:
+                ingest(splitter.finish(), producer_done=True)
+                flush_to_player(producer_done=True)
         except Exception:
             _LOG.exception("问答流失败")
-            if self._cancel.is_set():
-                return "aborted"
-            self._beep()
-            return "failed"
+            self._cancel.set()
+            stream_error = True
 
-        if self._cancel.is_set():
+        status = player.close()
+        if self._cancel.is_set() and not stream_error:
             return "aborted"
-        if play_index == 0:
-            self._beep()
-            return "failed"
+        if stream_error or status != "played":
+            if status != "aborted":
+                self._beep()
+            return "aborted" if status == "aborted" else "failed"
 
         qa.append_turn(user_text, "".join(assistant_parts))
         return "played"
