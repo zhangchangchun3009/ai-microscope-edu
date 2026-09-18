@@ -26,8 +26,8 @@ def test_roundtrip(tmp_path: Path) -> None:
     assert data["v"] == 2
 
 
-def test_legacy_unversioned_fab_uses_right_center(tmp_path: Path) -> None:
-    """首版左上角存档没有版本号，应改用右侧居中，避免旧默认位置粘住。"""
+def test_legacy_unversioned_fab_uses_anchor(tmp_path: Path) -> None:
+    """首版左上角存档没有版本号，应改用 80%/80% 锚点。"""
     path = tmp_path / "fab.json"
     path.write_text(json.dumps({"x": 8, "y": 8}), encoding="utf-8")
     expected = default_fab_pos(1920, 1080)
@@ -36,8 +36,8 @@ def test_legacy_unversioned_fab_uses_right_center(tmp_path: Path) -> None:
     assert loaded.y == pytest.approx(expected.y)
 
 
-def test_missing_and_corrupt_use_right_center(tmp_path: Path) -> None:
-    """文件缺失或损坏时应使用右侧垂直居中默认坐标。"""
+def test_missing_and_corrupt_use_anchor(tmp_path: Path) -> None:
+    """文件缺失或损坏时应使用 80%/80% 默认坐标。"""
     expected = default_fab_pos(1080, 1920)
     missing = load_fab(tmp_path / "nope.json", width=1080, height=1920)
     assert missing.x == pytest.approx(expected.x)
@@ -47,8 +47,8 @@ def test_missing_and_corrupt_use_right_center(tmp_path: Path) -> None:
     assert bad.x == pytest.approx(expected.x)
 
 
-def test_non_finite_coordinate_uses_right_center(tmp_path: Path) -> None:
-    """JSON 非有限坐标无效，应回退到右侧居中默认值。"""
+def test_non_finite_coordinate_uses_anchor(tmp_path: Path) -> None:
+    """JSON 非有限坐标无效，应回退到 80%/80% 默认值。"""
     path = tmp_path / "fab.json"
     path.write_text(
         json.dumps({"x": float("nan"), "y": 1}, allow_nan=True),
@@ -56,5 +56,15 @@ def test_non_finite_coordinate_uses_right_center(tmp_path: Path) -> None:
     )
     expected = default_fab_pos(1080, 1920)
     loaded = load_fab(path, width=1080, height=1920)
+    assert loaded.x == pytest.approx(expected.x)
+    assert loaded.y == pytest.approx(expected.y)
+
+
+def test_saved_out_of_bounds_resets_to_anchor(tmp_path: Path) -> None:
+    """已保存坐标对当前预览越界时回到锚点，不夹在新边缘。"""
+    path = tmp_path / "fab.json"
+    save_fab(path, FabPos(1800, 100))
+    expected = default_fab_pos(1200, 1080)
+    loaded = load_fab(path, width=1200, height=1080)
     assert loaded.x == pytest.approx(expected.x)
     assert loaded.y == pytest.approx(expected.y)

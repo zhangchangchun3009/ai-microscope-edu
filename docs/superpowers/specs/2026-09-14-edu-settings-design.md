@@ -15,7 +15,7 @@
 - 缺省方向 **90° 横屏**。
 - 字幕：一块最多两行的底栏；ASR 出字即显；TTS 后句顶前句；超长切幕；播完自己消失。
 - 虚拟键盘必须能 **拼音打中文**。
-- `api_key` / `device_secret` 用 **本机 CPU 序列号派生** 加解密，换板不可解，界面永不回显明文。
+- `api_key` / `device_secret` 用 **本机 CPU 序列号派生** 加解密，换板不可解。设置页保存后不回显明文；填写时可用「显示」钮切明文核对。
 - 设置走 **现有壳**：预览 | 右栏 | 工具条。本刀把分界线做成手指拖得动（现 handle 太窄，板上等于没做）。
 
 ## 1. 目标
@@ -107,7 +107,7 @@ llm:
 
 子页栈深最多两层。融合 / 拼接 / 历史继续占位。
 
-**虚拟键盘：** `QT_IM_MODULE=qtvirtualkeyboard`，默认 **zh_CN 拼音**（全键 + 候选栏），语言切换只保留 **简中 / 繁中 / 英文**（`VirtualKeyboardSettings.activeLocales` + `QT_VIRTUALKEYBOARD_AVAILABLE_LOCALES`）。`LANG`/`QLocale` 用简体中文。**禁止**走独立顶层 Desktop InputPanel（linuxfb + `RotateHost` 调不出）。改为 `QT_VIRTUALKEYBOARD_DESKTOP_DISABLE=1`，把 `InputPanel` 嵌进 `MainWindow` 底边（随内容一起旋转）。`InputPanel` 作为 `QQuickWidget` 根对象，视口跟着内容高度（含候选栏），避免最下一排被压扁。点键盘不得抢走编辑框焦点。**右栏始终可纵向滚动**（常显粗滚动条，触屏可拖）；键盘弹出时在内容下方垫一块与键盘等高的空白，把焦点/光标滚到键盘上方，不压缩设置页布局。linuxfb 用 `QT_QUICK_BACKEND=software`。板上须装与 Essentials **同版本** 的 `PySide6-Addons`（提供 `libQt6VirtualKeyboard*.so`）；Debian Qt 6.4 的 VirtualKeyboard 包不要混用。`edu-app.service` 把 `LD_LIBRARY_PATH` 指到 venv 的 `PySide6/Qt/lib`。验收：在 USER.md 里能拼出「洋葱」，并能切到英文。Mac 无该插件时可用外接键盘。
+**虚拟键盘：** `QT_IM_MODULE=qtvirtualkeyboard`，默认 **zh_CN 拼音**（全键 + 候选栏），语言切换只保留 **简中 / 繁中 / 英文**（`VirtualKeyboardSettings.activeLocales` + `QT_VIRTUALKEYBOARD_AVAILABLE_LOCALES`）。`LANG`/`QLocale` 用简体中文。**禁止**走独立顶层 Desktop InputPanel（linuxfb + `RotateHost` 调不出）。改为 `QT_VIRTUALKEYBOARD_DESKTOP_DISABLE=1`，把 `InputPanel` 嵌进 `MainWindow` 底边（随内容一起旋转）。`InputPanel` 作为 `QQuickWidget` 根对象，视口跟着内容高度（含候选栏），避免最下一排被压扁。点键盘不得抢走编辑框焦点。**右栏始终可纵向滚动**（常显粗滚动条；不做内容区拖动手势，避免幅度怪异并与输入抢手）。键盘弹出时在内容下方垫一块与键盘等高的空白，把焦点/光标滚到键盘上方，不压缩设置页布局。键盘显隐只跟输入法：隐藏键可收起，点空白也可能收起（不再闩锁）。关掉设置时收起。大模型子页离开（返回 / 关设置）时丢弃未保存输入，下次进入从 yaml 重填。linuxfb 用 `QT_QUICK_BACKEND=software`。板上须装与 Essentials **同版本** 的 `PySide6-Addons`（提供 `libQt6VirtualKeyboard*.so`）；Debian Qt 6.4 的 VirtualKeyboard 包不要混用。`edu-app.service` 把 `LD_LIBRARY_PATH` 指到 venv 的 `PySide6/Qt/lib`。验收：在 USER.md 里能拼出「洋葱」，并能切到英文。Mac 无该插件时可用外接键盘。
 
 ## 5. 立刻旋转
 
@@ -159,7 +159,7 @@ TTS 开口优先于 ASR 剩余阅读时间。关字幕则永不出现该框；�
 
 ## 8. 大模型与设备绑定密钥
 
-字段与现 `load_llm_config` 对齐：`base_url`、`model`、`timeout_secs`（10–600，缺省 30）、`api_key`、`device_secret`、`device_secret_hosts`（列表；缺省 `www.aiinstrum.com`；显式空列表表示不加网关头）。
+字段与现 `load_llm_config` 对齐：`base_url`、`model`、`timeout_secs`（10–600，缺省 30）、`api_key`、`device_secret`（界面「API 网关口令」，`enc1:`）、`device_secret_hosts`（界面「API 网关地址」，**明文**，不加密、不密文回显；列表；缺省 `www.aiinstrum.com`；yaml 显式空列表表示不加网关头。设置页该栏显示已保存主机；空栏再保存保持原列表，不得写成 `[]`）。密钥栏旁路用眼睛图标（无「显示/隐藏」四字）切换明文。
 
 **设备 ID：** 与旧 OTA 同数据源，只用于派生加密密钥：优先设备树 `serial-number`，否则 `/proc/cpuinfo` 的 `Serial:`（小写 hex）。都没有时（Mac）用稳定回退 `macos-dev`，**不要**把板端密文拿到 Mac 上当可解密。单测注入假序列号。
 
@@ -167,7 +167,7 @@ TTS 开口优先于 ASR 剩余阅读时间。关字幕则永不出现该框；�
 
 明文（迁移来的旧 json、或教师新输入）在 **下一次写入 yaml 前** 加密。读盘：`enc1:` 用本机 serial 解密；失败则该密钥视为缺失（本轮 beep），设置页提示「密钥无法在本机解密，请重新输入」，**绝不**把错误解密结果当 Bearer。非 `enc1:` 前缀当明文，保存时改写成 `enc1:`。
 
-**界面永不回显明文：** 已保存时输入框空、占位「已加密保存，输入新密钥将覆盖」；不填表示保持原密文。日志禁止打印 key。yaml 样例里只写 `enc1:` 占位或注释，不写真密钥。
+**保存后不回显密钥：** 已保存时 API 密钥与网关口令输入框空、占位「已加密保存，输入新密钥将覆盖」；不填表示保持原密文。网关地址明文显示已保存主机。密钥栏旁路眼睛图标可在填写时切明文，保存后收回。日志禁止打印 key。yaml 样例里只写 `enc1:` 占位或注释，不写真密钥。
 
 保存：三件套（url / 解密后的 key / model）非空才写 LLM 段并 `reload_llm()`；进行中的回合不中断。环境变量 `EDU_LLM_*` 只要出现在进程环境则对应项只读并提示锁定；当前 unit **不**设这些变量。
 
@@ -200,7 +200,7 @@ TTS 开口优先于 ASR 剩余阅读时间。关字幕则永不出现该框；�
 | `app/rotate_host.py` | 物理全屏宿主 |
 | `app/shell_state.py` | 现有分屏状态；`set_split_ratio` 夹紧 0.25–0.75（本刀不改语义） |
 | `app/settings_page.py` | 分组与子页栈 |
-| `app/settings_prompt.py` / `settings_llm.py` | USER.md；LLM 表单（不回显 key） |
+| `app/settings_prompt.py` / `settings_llm.py` | USER.md；LLM 表单（保存后不回显；填写时可显示明文） |
 | `app/caption_bar.py` | 两行框、2 s 切幕、播完隐藏 |
 | `qa/client.py` / `qa/turn.py` | 从 yaml 的 `llm` 段加载；`reload_llm()` |
 | `voice/session.py` | 字幕回调 |

@@ -18,6 +18,10 @@ TOOLS: tuple[tuple[str, str], ...] = (
     ("history", "历史"),
     ("settings", "设置"),
 )
+TOOL_BUTTON_DIAMETER = 72
+TOOL_FOLD_DIAMETER = 48
+TOOL_STRIP_EXPANDED_W = 104
+TOOL_STRIP_FOLDED_W = 60
 
 
 class ToolStrip(QWidget):
@@ -29,27 +33,51 @@ class ToolStrip(QWidget):
         on_toggle: Callable[[], None],
         parent: QWidget | None = None,
     ) -> None:
+        """组装折叠柄与功能圆钮，垂直居中。
+
+        参数:
+            on_tool: 点功能钮，参数为 ``TOOLS`` 的 key。
+            on_toggle: 点折叠柄。
+            parent: 父控件。
+
+        返回:
+            无。
+
+        副作用:
+            构建控件树。
+        """
         super().__init__(parent)
         self.setObjectName("toolStrip")
         self._on_tool = on_tool
         self._buttons: list[CircleIconButton] = []
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 12, 6, 12)
-        layout.setSpacing(6)
+        layout.setSpacing(8)
         layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self._fold = CircleIconButton("chevron_right", diameter=40)
+        self._fold = CircleIconButton("chevron_right", diameter=TOOL_FOLD_DIAMETER)
         self._fold.clicked.connect(on_toggle)
+        layout.addStretch(1)
         layout.addWidget(self._fold, 0, Qt.AlignmentFlag.AlignHCenter)
         for key, title in TOOLS:
-            btn = CircleIconButton(key, title, diameter=56)
+            btn = CircleIconButton(key, title, diameter=TOOL_BUTTON_DIAMETER)
             btn.clicked.connect(lambda checked=False, k=key: self._on_tool(k))
             layout.addWidget(btn, 0, Qt.AlignmentFlag.AlignHCenter)
             self._buttons.append(btn)
         layout.addStretch(1)
 
     def set_expanded(self, expanded: bool) -> None:
-        """折叠时只留圆形折叠柄。"""
+        """折叠时只留圆形折叠柄。
+
+        参数:
+            expanded: True 显示全部功能钮。
+
+        返回:
+            无。
+
+        副作用:
+            改宽度与功能钮可见性。
+        """
         self._fold.set_icon_key("chevron_right" if expanded else "chevron_left")
         for btn in self._buttons:
             btn.setVisible(expanded)
-        self.setFixedWidth(88 if expanded else 52)
+        self.setFixedWidth(TOOL_STRIP_EXPANDED_W if expanded else TOOL_STRIP_FOLDED_W)

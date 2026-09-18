@@ -28,12 +28,13 @@ from app.input_panel import (
     RIGHT_SCROLL,
     attach_embedded_keyboard,
     configure_right_pane_scroll,
+    dismiss_embedded_keyboard,
 )
 from app.platform import apply_virtual_keyboard_locale, ensure_embedded_platform
 from app.preview_pane import PreviewPane
 from app.rotate_host import RotateHost
 from app.settings_page import SettingsPage
-from app.shell_state import SPLIT_HANDLE_PX, FabPos, RightPanel, ShellState
+from app.shell_state import SPLIT_HANDLE_PX, FabPos, RightPanel, ShellState, place_fab
 from app.stub_pages import StubPage
 from app.theme import apply_theme
 from app.tool_strip import ToolStrip
@@ -328,8 +329,9 @@ class MainWindow(QWidget):
         save_fab(self._fab_path, pos)
 
     def _clamp_fab(self) -> FabPos:
-        """按当前预览尺寸夹紧浮标并返回坐标状态。"""
-        pos = self._fab.pos_state().clamped(
+        """按当前预览放置浮标：仍在界内保持，越界则回到 80%/80%。"""
+        pos = place_fab(
+            self._fab.pos_state(),
             self._preview.width(),
             self._preview.height(),
         )
@@ -417,6 +419,7 @@ class MainWindow(QWidget):
             QTimer.singleShot(0, self._sync_splitter)
         else:
             self._right_scroll.hide()
+            dismiss_embedded_keyboard(self)
 
     def _sync_splitter(self) -> None:
         w = max(self._splitter.width(), 1)

@@ -109,11 +109,11 @@ def apply_theme(app: QApplication) -> None:
             background: {ACCENT_DIM};
         }}
         QTextEdit#historyBody {{
-            background: {SURFACE};
+            background: {PANEL_BG};
             color: {TEXT};
             border: 1px solid {LINE};
             border-radius: 12px;
-            font-size: 18px;
+            font-size: 22px;
             padding: 8px 12px;
         }}
         QWidget#settingsPage QLineEdit,
@@ -134,7 +134,8 @@ def apply_theme(app: QApplication) -> None:
         QSplitter::handle:horizontal:hover {{
             background: {ACCENT};
         }}
-        QPushButton#ghostBtn, QPushButton#settingsCtrl, QPushButton#settingsNav {{
+        QPushButton#ghostBtn, QPushButton#settingsCtrl, QPushButton#settingsNav,
+        QPushButton#secretRevealBtn {{
             background: {SURFACE};
             color: {TEXT};
             border: 1px solid {LINE};
@@ -142,12 +143,17 @@ def apply_theme(app: QApplication) -> None:
             font-size: 18px;
             padding: 10px 22px;
         }}
+        QPushButton#secretRevealBtn {{
+            border-radius: 12px;
+            padding: 8px 10px;
+            font-size: 16px;
+        }}
         QPushButton#ghostBtn:pressed, QPushButton#settingsCtrl:pressed,
-        QPushButton#settingsNav:pressed {{
+        QPushButton#settingsNav:pressed, QPushButton#secretRevealBtn:pressed {{
             background: {ACCENT_DIM};
             border-color: {ACCENT};
         }}
-        QPushButton#settingsCtrl:checked {{
+        QPushButton#settingsCtrl:checked, QPushButton#secretRevealBtn:checked {{
             background: {ACCENT_DIM};
             border-color: {ACCENT};
             color: {TEXT};

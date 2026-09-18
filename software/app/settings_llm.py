@@ -1,4 +1,4 @@
-"""大模型子页：yaml ``llm`` 段表单；密钥不回显明文。"""
+"""大模型子页：yaml ``llm`` 段表单；保存后密钥栏为空，填写时可用显示钮。"""
 
 from __future__ import annotations
 
@@ -9,20 +9,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from app.theme import SETTINGS_CTRL_H
+from app.theme import ACCENT, MUTED, SETTINGS_CTRL_H, TEXT
 from qa.config import DEFAULT_DEVICE_SECRET_HOSTS, DEFAULT_LLM_TIMEOUT_S
 from system.device_id import read_cpu_serial
 from system.edu_config import edu_yaml_path, load_edu, patch_edu
@@ -43,7 +43,54 @@ _ENV_TO_FIELD = {
 }
 _TRIO_REFUSE = "请填写接口地址、密钥和模型。"
 _DECRYPT_HINT = "密钥无法在本机解密，请重新输入"
-_ENV_BANNER = "部分字段由环境变量 EDU_LLM_* 锁定，无法在此修改。"
+
+
+def reveal_button_caption(*, revealed: bool) -> str:
+    """眼睛钮不写字，避免占宽度；``revealed`` 仅占位以保持调用形状。
+
+    参数:
+        revealed: 当前是否正在显示明文（不参与文案）。
+
+    返回:
+        空串。
+
+    副作用:
+        无。
+    """
+    del revealed
+    return ""
+
+
+def make_eye_icon(*, revealed: bool, size: int = 28) -> QIcon:
+    """绘制开眼或划掉的眼睛图标，不依赖 emoji 字体。
+
+    参数:
+        revealed: True 表示正在显示明文，画划掉的眼睛（再点则隐藏）。
+        size: 边长像素。
+
+    返回:
+        可设到 ``QPushButton`` 的图标。
+
+    副作用:
+        无。
+    """
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(ACCENT if revealed else TEXT)
+    painter.setPen(QPen(color, max(size / 12, 2)))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    almond = QRectF(size * 0.12, size * 0.32, size * 0.76, size * 0.36)
+    painter.drawEllipse(almond)
+    pupil = QRectF(size * 0.38, size * 0.38, size * 0.24, size * 0.24)
+    painter.setBrush(QColor(MUTED if revealed else ACCENT))
+    painter.drawEllipse(pupil)
+    if revealed:
+        painter.setPen(QPen(QColor(TEXT), max(size / 10, 2)))
+        painter.drawLine(int(size * 0.18), int(size * 0.78), int(size * 0.82), int(size * 0.22))
+    painter.end()
+    return QIcon(pm)
 
 
 @dataclass(frozen=True)
@@ -283,19 +330,50 @@ def _hosts_for_save(
     existing: Mapping[str, Any],
     locked: frozenset[str],
 ) -> list[str]:
+    """表单空栏保持已有网关地址，避免保存其它字段时写成空列表。
+
+    参数:
+        form_text: 「API 网关地址」输入框原文。
+        existing: 当前 yaml 的 ``llm`` 段。
+        locked: 被 ``EDU_LLM_*`` 锁住的字段名。
+
+    返回:
+        要写入 yaml 的 hostname 列表。
+
+    副作用:
+        无。
+    """
     if "device_secret_hosts" in locked:
-        raw = existing.get("device_secret_hosts")
-        if isinstance(raw, list):
-            return [str(item).strip() for item in raw if str(item).strip()]
-        if isinstance(raw, str):
-            return parse_host_list(raw)
-        if "device_secret_hosts" not in existing:
-            return list(DEFAULT_DEVICE_SECRET_HOSTS)
-        return []
+        return _existing_hosts(existing)
+    if not form_text.strip():
+        return _existing_hosts(existing)
     return parse_host_list(form_text)
 
 
+def _existing_hosts(existing: Mapping[str, Any]) -> list[str]:
+    """已有 yaml 的网关地址列表；缺键则用缺省白名单。"""
+    if "device_secret_hosts" not in existing:
+        return list(DEFAULT_DEVICE_SECRET_HOSTS)
+    raw = existing.get("device_secret_hosts")
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    if isinstance(raw, str):
+        return parse_host_list(raw)
+    return []
+
+
 def _hosts_for_display(existing: Mapping[str, Any]) -> str:
+    """把已保存的网关地址列成逗号分隔明文，供输入框显示。
+
+    参数:
+        existing: 当前 yaml 的 ``llm`` 段。
+
+    返回:
+        逗号分隔的主机名；缺键则用缺省白名单。
+
+    副作用:
+        无。
+    """
     if "device_secret_hosts" not in existing:
         return ",".join(DEFAULT_DEVICE_SECRET_HOSTS)
     raw = existing.get("device_secret_hosts")
@@ -330,7 +408,7 @@ class LlmSettingsPage(QWidget):
         serial: str | None = None,
         parent: QWidget | None = None,
     ) -> None:
-        """组装 LLM 字段；密钥栏空且带占位，不回显明文。
+        """组装 LLM 字段；密钥栏空且默认密文回显，填写时可用眼睛钮。
 
         参数:
             on_back: 页头「返回」。
@@ -345,7 +423,7 @@ class LlmSettingsPage(QWidget):
             无。
 
         副作用:
-            读 ``edu.yaml`` 填非密钥字段。
+            读 ``edu.yaml`` 填非密钥字段与明文网关地址。
         """
         super().__init__(parent)
         self.setObjectName("settingsLlmPage")
@@ -365,16 +443,14 @@ class LlmSettingsPage(QWidget):
         self._timeout.setRange(_TIMEOUT_MIN, _TIMEOUT_MAX)
         self._timeout.setValue(_TIMEOUT_DEFAULT)
         self._timeout.setMinimumHeight(SETTINGS_CTRL_H)
-        self._api_key = self._secret_edit()
-        self._device_secret = self._secret_edit()
+        self._api_key, _api_row, self._reveal_key = self._secret_edit()
+        self._device_secret, secret_row, self._reveal_secret = self._secret_edit()
         self._hosts = QLineEdit(self)
-        for widget in (self._base_url, self._model, self._hosts):
+        self._hosts.setMinimumHeight(SETTINGS_CTRL_H)
+        for widget in (self._base_url, self._model):
             widget.setMinimumHeight(SETTINGS_CTRL_H)
         self._fill_from_disk()
 
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         inner = QWidget()
         form = QFormLayout(inner)
         form.setContentsMargins(0, 0, 0, 0)
@@ -382,10 +458,9 @@ class LlmSettingsPage(QWidget):
         form.addRow("接口地址", self._base_url)
         form.addRow("模型", self._model)
         form.addRow("超时（秒）", self._timeout)
-        form.addRow("API 密钥", self._api_key)
-        form.addRow("设备暗号", self._device_secret)
-        form.addRow("暗号主机", self._hosts)
-        scroll.setWidget(inner)
+        form.addRow("API 密钥", _api_row)
+        form.addRow("API 网关口令", secret_row)
+        form.addRow("API 网关地址", self._hosts)
 
         save_btn = QPushButton("保存")
         save_btn.setObjectName("settingsNav")
@@ -397,16 +472,84 @@ class LlmSettingsPage(QWidget):
         layout.setSpacing(12)
         layout.addLayout(self._header("大模型", "返回", on_back))
         layout.addWidget(self._banner)
-        layout.addWidget(scroll, 1)
+        layout.addWidget(inner, 1)
         layout.addWidget(save_btn)
 
-    def _secret_edit(self) -> QLineEdit:
-        """空栏 + 占位 + 密码回显，避免露出明文。"""
+    def showEvent(self, event: QShowEvent) -> None:
+        """每次进入子页从 yaml 重填，丢掉上次未保存的草稿。
+
+        参数:
+            event: Qt 显示事件。
+
+        返回:
+            无。
+
+        副作用:
+            调用 ``_fill_from_disk``。
+        """
+        super().showEvent(event)
+        self._fill_from_disk()
+
+    def _secret_edit(self) -> tuple[QLineEdit, QWidget, QPushButton]:
+        """空栏 + 占位 + 密码回显；旁路眼睛钮可在填写时切明文。
+
+        参数:
+            无。
+
+        返回:
+            输入框、含眼睛钮的行控件、揭示按钮。
+
+        副作用:
+            点揭示钮会切换该行 ``EchoMode`` 并换图标。
+        """
         edit = QLineEdit(self)
         edit.setEchoMode(QLineEdit.EchoMode.Password)
         edit.setPlaceholderText(KEY_KEEP_PLACEHOLDER)
         edit.setMinimumHeight(SETTINGS_CTRL_H)
-        return edit
+        btn = QPushButton(self)
+        btn.setObjectName("secretRevealBtn")
+        btn.setCheckable(True)
+        btn.setFixedHeight(SETTINGS_CTRL_H)
+        btn.setFixedWidth(SETTINGS_CTRL_H)
+        btn.setText("")
+        btn.setIcon(make_eye_icon(revealed=False))
+        btn.setIconSize(QSize(28, 28))
+        btn.setToolTip("显示明文")
+
+        def _on_toggled(checked: bool) -> None:
+            edit.setEchoMode(
+                QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
+            )
+            btn.setIcon(make_eye_icon(revealed=checked))
+            btn.setToolTip("隐藏明文" if checked else "显示明文")
+
+        btn.toggled.connect(_on_toggled)
+        row = QWidget(self)
+        row.setObjectName("secretFieldRow")
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        lay.addWidget(edit, 1)
+        lay.addWidget(btn, 0)
+        return edit, row, btn
+
+    def _reset_reveal(self, btn: QPushButton, edit: QLineEdit) -> None:
+        """保存或重新读盘后收回明文，按钮回到闭眼图标。
+
+        参数:
+            btn: 该栏揭示钮。
+            edit: 对应输入框。
+
+        返回:
+            无。
+
+        副作用:
+            取消勾选并设回密码回显。
+        """
+        btn.setChecked(False)
+        edit.setEchoMode(QLineEdit.EchoMode.Password)
+        btn.setIcon(make_eye_icon(revealed=False))
+        btn.setToolTip("显示明文")
 
     def _header(
         self,
@@ -436,13 +579,16 @@ class LlmSettingsPage(QWidget):
         self._timeout.setValue(clamp_timeout_secs(llm.get("timeout_secs", _TIMEOUT_DEFAULT)))
         self._api_key.setText("")
         self._device_secret.setText("")
-        self._hosts.setText(_hosts_for_display(llm))
         if "EDU_LLM_BASE_URL" in self._environ:
             self._base_url.setText(str(self._environ.get("EDU_LLM_BASE_URL") or ""))
         if "EDU_LLM_MODEL" in self._environ:
             self._model.setText(str(self._environ.get("EDU_LLM_MODEL") or ""))
         if "EDU_LLM_DEVICE_SECRET_HOSTS" in self._environ:
             self._hosts.setText(str(self._environ.get("EDU_LLM_DEVICE_SECRET_HOSTS") or ""))
+        else:
+            self._hosts.setText(_hosts_for_display(llm))
+        self._reset_reveal(self._reveal_key, self._api_key)
+        self._reset_reveal(self._reveal_secret, self._device_secret)
         self._base_url.setReadOnly("base_url" in locked)
         self._model.setReadOnly("model" in locked)
         self._api_key.setReadOnly("api_key" in locked)
@@ -500,6 +646,4 @@ class LlmSettingsPage(QWidget):
                 self._reload_llm()
             except Exception:
                 _LOG.exception("reload_llm 失败")
-        self._api_key.setText("")
-        self._device_secret.setText("")
         self._fill_from_disk()

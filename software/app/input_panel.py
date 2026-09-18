@@ -57,7 +57,7 @@ def scroll_delta_to_clear_keyboard(
 
 
 def configure_right_pane_scroll(scroll: QScrollArea) -> None:
-    """右栏始终可纵向滚动：常显粗滚动条，linuxfb 上可拖视口。
+    """右栏始终可纵向滚动：常显粗滚动条。不做内容区拖动手势。
 
     参数:
         scroll: ``rightPaneScroll``。
@@ -66,20 +66,18 @@ def configure_right_pane_scroll(scroll: QScrollArea) -> None:
         无。
 
     副作用:
-        改滚动条策略；若有 ``QScroller`` 则抓取左键手势（触屏映射为鼠标）。
+        改滚动条策略；视口不抢焦点，避免点滚动条时输入框失焦。
     """
     scroll.setWidgetResizable(True)
     scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    try:
-        from PySide6.QtWidgets import QScroller
-
-        QScroller.grabGesture(
-            scroll.viewport(),
-            QScroller.ScrollerGestureType.LeftMouseButtonGesture,
-        )
-    except Exception:
-        _LOG.debug("QScroller 不可用，右栏仍可用滚动条")
+    scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    viewport = scroll.viewport()
+    if viewport is not None:
+        viewport.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    inner = scroll.widget()
+    if inner is not None:
+        inner.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
 
 def apply_right_pane_keyboard_inset(host: QWidget, kb_h: int) -> None:
@@ -121,6 +119,27 @@ def apply_right_pane_keyboard_inset(host: QWidget, kb_h: int) -> None:
     QTimer.singleShot(0, _reveal)
 
 
+def dismiss_embedded_keyboard(host: QWidget) -> None:
+    """关掉设置/历史右栏时收起键盘。
+
+    参数:
+        host: ``MainWindow``。
+
+    返回:
+        无。
+
+    副作用:
+        ``QInputMethod.hide``、隐藏 ``eduInputPanel``、垫块归零。
+    """
+    im = QGuiApplication.inputMethod()
+    if im is not None:
+        im.hide()
+    panel = host.findChild(QWidget, _KEYBOARD_OBJECT)
+    if panel is not None:
+        panel.hide()
+    apply_right_pane_keyboard_inset(host, 0)
+
+
 def attach_embedded_keyboard(host: QWidget) -> QWidget | None:
     """在 ``host`` 底边叠一层 InputPanel；未启用虚拟键盘模块时返回 None。
 
@@ -133,6 +152,7 @@ def attach_embedded_keyboard(host: QWidget) -> QWidget | None:
     副作用:
         监听输入法可见性、键盘高度与宿主 resize；垫高右栏。
         面板 ``NoFocus``，避免点按键抢走编辑框焦点。
+        显隐只跟 ``QInputMethod``，隐藏键才能收起，不做失焦闩锁。
     """
     if os.environ.get("QT_IM_MODULE") != "qtvirtualkeyboard":
         return None
@@ -205,7 +225,7 @@ def _layout_keyboard(host: QWidget, panel: QWidget) -> None:
     strip = host.findChild(QWidget, "toolStrip")
     strip_w = strip.width() if strip is not None else 0
     width = max(host.width() - strip_w, 1)
-    if not visible:
+    if not visible or not _right_pane_open(host):
         panel.hide()
         apply_right_pane_keyboard_inset(host, 0)
         return
@@ -249,6 +269,12 @@ def _scroll_focus_above_keyboard(scroll: QScrollArea, kb_h: int) -> None:
     reveal = getattr(fw, "ensureCursorVisible", None)
     if callable(reveal):
         reveal()
+
+
+def _right_pane_open(host: QWidget) -> bool:
+    """右栏滚动区是否正在显示。"""
+    scroll = host.findChild(QScrollArea, RIGHT_SCROLL)
+    return bool(scroll is not None and scroll.isVisible())
 
 
 class _ResizeFilter(QObject):

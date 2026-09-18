@@ -12,6 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QLabel,
@@ -188,6 +189,9 @@ def test_empty_turns_show_placeholder(qapp: QApplication) -> None:
     assert "还没有问答" in _body(page).toPlainText()
     assert page.findChildren(QLineEdit) == []
     assert _body(page).isReadOnly()
+    assert (
+        _body(page).textInteractionFlags() == Qt.TextInteractionFlag.NoTextInteraction
+    )
     texts = [lst.item(i).text() for i in range(lst.count())]
     assert any("当前" in text for text in texts)
     page.close()
@@ -215,4 +219,56 @@ def test_reload_keeps_selected_id(qapp: QApplication) -> None:
     lst = _list(page)
     assert lst.currentRow() == 0
     assert "这是洋葱表皮。" in _body(page).toPlainText()
+    page.close()
+
+
+def test_history_body_stamps_and_role_backgrounds(qapp: QApplication) -> None:
+    """用户/助手块带本地时间戳，HTML 用不同 class 区分背景。"""
+    from datetime import datetime
+
+    from app.history_view import format_turn_stamp, history_body_html
+
+    stamp = datetime(2026, 9, 18, 19, 7, 34)
+    assert format_turn_stamp(stamp.timestamp()) == "2026年09月18日 19:07:34"
+    html = history_body_html(
+        [
+            TurnRecord(
+                id=1,
+                session_id="old",
+                seq=1,
+                user_text="这是什么",
+                assistant_text="这是洋葱表皮。",
+                created_at=stamp.timestamp(),
+            )
+        ]
+    )
+    assert "用户 2026年09月18日 19:07:34：" in html
+    assert "助手 2026年09月18日 19:07:34：" in html
+    assert "historyUser" in html
+    assert "historyAssistant" in html
+    assert "这是什么" in html
+    assert "这是洋葱表皮。" in html
+
+    qa = _two_session_qa()
+    qa.turns["old"] = [
+        TurnRecord(
+            id=1,
+            session_id="old",
+            seq=1,
+            user_text="这是什么",
+            assistant_text="这是洋葱表皮。",
+            created_at=stamp.timestamp(),
+        )
+    ]
+    page = HistoryPage(on_close=lambda: None, qa=qa, on_new_session=lambda: None)
+    page.show()
+    qapp.processEvents()
+    lst = _list(page)
+    lst.setCurrentRow(0)
+    qapp.processEvents()
+    body = _body(page)
+    assert "用户 2026年09月18日 19:07:34：" in body.toPlainText()
+    html = body.toHtml()
+    assert "#243044" in html
+    assert "#16332e" in html
     page.close()

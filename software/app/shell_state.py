@@ -12,6 +12,9 @@ SPLIT_DEFAULT = 0.5
 SPLIT_HANDLE_PX = 32
 FAB_MARGIN = 8.0
 FAB_SIZE = 96.0
+# 无存档或越界回退：预览宽高的比例，对角线靠右下，少挡标本中心。
+FAB_ANCHOR_X = 0.8
+FAB_ANCHOR_Y = 0.8
 DRAG_THRESHOLD_PX = 24.0
 PTT_HOLD_S = 0.35
 
@@ -60,14 +63,54 @@ class FabPos:
 
 
 def default_fab_pos(width: float, height: float, size: float = FAB_SIZE) -> FabPos:
-    """无存档时的浮标位置：贴预览右侧、垂直居中。
+    """无存档时的浮标位置：预览宽/高约 80%、80%（右下，少挡中心）。
 
-    按传入宽高计算，不依赖屏幕旋转设置。横屏时即右缘中点；竖屏 framebuffer
-    未旋转前同样贴当前预览的右边。
+    按传入宽高计算，不依赖屏幕旋转设置。
+
+    参数:
+        width: 预览宽度。
+        height: 预览高度。
+        size: 浮标边长。
+
+    返回:
+        夹紧后的左上角坐标。
+
+    副作用:
+        无。
     """
-    return FabPos(width - size - FAB_MARGIN, (height - size) / 2).clamped(
-        width, height, size
-    )
+    return FabPos(
+        width * FAB_ANCHOR_X - size / 2,
+        height * FAB_ANCHOR_Y - size / 2,
+    ).clamped(width, height, size)
+
+
+def place_fab(
+    pos: FabPos,
+    width: float,
+    height: float,
+    size: float = FAB_SIZE,
+) -> FabPos:
+    """把浮标放到当前预览里；越界则回到 80%/80% 锚点。
+
+    展开工具条或打开右栏后预览变窄，原像素坐标常会贴在新右缘。
+    此时不用夹紧结果，改回锚点，方便重启后位置可预期。
+
+    参数:
+        pos: 已保存或当前像素坐标。
+        width: 当前预览宽。
+        height: 当前预览高。
+        size: 浮标边长。
+
+    返回:
+        仍在界内则原坐标（已夹紧相等）；否则 ``default_fab_pos``。
+
+    副作用:
+        无。
+    """
+    clamped = pos.clamped(width, height, size)
+    if abs(clamped.x - pos.x) > 0.5 or abs(clamped.y - pos.y) > 0.5:
+        return default_fab_pos(width, height, size)
+    return clamped
 
 
 def classify_fab_gesture(*, moved: float, held_s: float) -> FabGestureKind:

@@ -121,11 +121,45 @@ def test_decrypt_fail_without_new_key_refuses() -> None:
     assert "enc1:00" not in result.error
 
 
-def test_explicit_empty_hosts_saved_as_empty_list() -> None:
-    result = build_llm_section(_form(device_secret_hosts="  "), existing={}, serial="s")
+def test_empty_hosts_keeps_existing_list() -> None:
+    """保存后栏空；再保存其它字段时不得把网关地址写成空列表。"""
+    result = build_llm_section(
+        _form(device_secret_hosts="  "),
+        existing={
+            "base_url": "https://old.example/v1",
+            "api_key": "sk",
+            "model": "m",
+            "device_secret_hosts": ["gateway.example.com"],
+        },
+        serial="s",
+    )
     assert result.ok is True
     assert result.llm is not None
-    assert result.llm["device_secret_hosts"] == []
+    assert result.llm["device_secret_hosts"] == ["gateway.example.com"]
+
+
+def test_empty_hosts_without_existing_uses_default() -> None:
+    from qa.config import DEFAULT_DEVICE_SECRET_HOSTS
+
+    result = build_llm_section(_form(device_secret_hosts=""), existing={}, serial="s")
+    assert result.ok is True
+    assert result.llm is not None
+    assert result.llm["device_secret_hosts"] == list(DEFAULT_DEVICE_SECRET_HOSTS)
+
+
+def test_reveal_button_is_icon_only(qapp) -> None:
+    """眼睛钮无文字，开/闭两枚图标都有效。"""
+    del qapp
+    from app.settings_llm import make_eye_icon, reveal_button_caption
+
+    assert reveal_button_caption(revealed=False) == ""
+    assert reveal_button_caption(revealed=True) == ""
+    opened = make_eye_icon(revealed=False)
+    hidden = make_eye_icon(revealed=True)
+    assert opened is not None
+    assert hidden is not None
+    assert not opened.isNull()
+    assert not hidden.isNull()
 
 
 def test_timeout_written_clamped() -> None:
@@ -234,3 +268,90 @@ def test_llm_trio_refuse_shows_banner_without_modal(
     assert execs == []
     assert not page._banner.isHidden()
     assert page._banner.text()
+
+
+def test_llm_page_labels_and_secrets_blank_after_fill(
+    tmp_path: Path,
+    qapp,
+) -> None:
+    """网关口令保存后不回显；网关地址明文；密钥用眼睛图标切明文。"""
+    del qapp
+    from PySide6.QtWidgets import QFormLayout, QLineEdit, QScrollArea
+
+    from app.settings_llm import LlmSettingsPage
+    from system.edu_config import patch_edu
+    from system.secret_box import encrypt_secret
+
+    path = tmp_path / "edu.yaml"
+    patch_edu(
+        path,
+        llm={
+            "base_url": "https://api.example.com/v1",
+            "api_key": encrypt_secret("sk-keep", "serial-a"),
+            "model": "qwen-plus",
+            "device_secret": encrypt_secret("gw-keep", "serial-a"),
+            "device_secret_hosts": ["www.aiinstrum.com"],
+        },
+    )
+    page = LlmSettingsPage(on_back=lambda: None, edu_path=path, serial="serial-a")
+    form = page.findChild(QFormLayout)
+    labels = [
+        form.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text()
+        for i in range(form.rowCount())
+        if form.itemAt(i, QFormLayout.ItemRole.LabelRole) is not None
+    ]
+    assert "API 网关口令" in labels
+    assert "API 网关地址" in labels
+    assert "设备暗号" not in labels
+    assert "暗号主机" not in labels
+    assert page._device_secret.text() == ""
+    assert page._hosts.text() == "www.aiinstrum.com"
+    assert page._device_secret.echoMode() == QLineEdit.EchoMode.Password
+    assert page._hosts.echoMode() == QLineEdit.EchoMode.Normal
+    assert page.findChildren(QScrollArea) == []
+    assert page._reveal_secret.text() == ""
+    assert not page._reveal_secret.icon().isNull()
+    page._reveal_secret.setChecked(True)
+    assert page._device_secret.echoMode() == QLineEdit.EchoMode.Normal
+    page._fill_from_disk()
+    assert page._device_secret.text() == ""
+    assert page._hosts.text() == "www.aiinstrum.com"
+    assert page._reveal_secret.isChecked() is False
+    assert page._device_secret.echoMode() == QLineEdit.EchoMode.Password
+
+
+def test_llm_page_discards_unsaved_on_reshow(
+    tmp_path: Path,
+    qapp,
+) -> None:
+    """未保存就离开再进入，输入框回到 yaml，不把草稿留下来。"""
+    from PySide6.QtWidgets import QLineEdit
+
+    from app.settings_llm import LlmSettingsPage
+    from system.edu_config import patch_edu
+    from system.secret_box import encrypt_secret
+
+    path = tmp_path / "edu.yaml"
+    patch_edu(
+        path,
+        llm={
+            "base_url": "https://api.example.com/v1",
+            "api_key": encrypt_secret("sk-keep", "serial-a"),
+            "model": "qwen-plus",
+            "device_secret_hosts": ["www.aiinstrum.com"],
+        },
+    )
+    page = LlmSettingsPage(on_back=lambda: None, edu_path=path, serial="serial-a")
+    page.show()
+    qapp.processEvents()
+    page._base_url.setText("https://draft.example/v1")
+    page._api_key.setText("sk-draft")
+    page._hosts.setText("draft.example")
+    page.hide()
+    qapp.processEvents()
+    page.show()
+    qapp.processEvents()
+    assert page._base_url.text() == "https://api.example.com/v1"
+    assert page._api_key.text() == ""
+    assert page._api_key.echoMode() == QLineEdit.EchoMode.Password
+    assert page._hosts.text() == "www.aiinstrum.com"

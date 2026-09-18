@@ -108,11 +108,32 @@ def test_fab_clamped_inside_preview() -> None:
     assert 8 <= pos.y <= 1920 - 72 - 8
 
 
-def test_default_fab_pos_right_center_landscape() -> None:
-    """无存档时浮标在预览右侧垂直居中（按当前宽高，不假设已旋转）。"""
+def test_default_fab_pos_lower_right_anchor() -> None:
+    """无存档时浮标在预览约 80%、80%（对角线靠右下），不挡标本中心。"""
     pos = default_fab_pos(1920, 1080)
-    assert pos.x == pytest.approx(1920 - FAB_SIZE - FAB_MARGIN)
-    assert pos.y == pytest.approx((1080 - FAB_SIZE) / 2)
+    assert pos.x == pytest.approx(1920 * 0.8 - FAB_SIZE / 2)
+    assert pos.y == pytest.approx(1080 * 0.8 - FAB_SIZE / 2)
+
+
+def test_place_fab_keeps_in_bounds_drag() -> None:
+    """仍在预览内的拖动位置保持，不强制回锚点。"""
+    from app.shell_state import place_fab
+
+    pos = FabPos(200, 300)
+    out = place_fab(pos, 1920, 1080)
+    assert out.x == pytest.approx(200)
+    assert out.y == pytest.approx(300)
+
+
+def test_place_fab_out_of_bounds_resets_to_anchor() -> None:
+    """展开工具条后预览变窄、原坐标越界时回到 80%/80%，不贴死在新右缘。"""
+    from app.shell_state import place_fab
+
+    pos = FabPos(1800, 200)
+    out = place_fab(pos, 1200, 1080)
+    expected = default_fab_pos(1200, 1080)
+    assert out.x == pytest.approx(expected.x)
+    assert out.y == pytest.approx(expected.y)
 
 
 def test_fab_gesture_drag_vs_tap_vs_ptt() -> None:

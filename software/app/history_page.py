@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.history_view import history_body_html
 from app.theme import SETTINGS_CTRL_H
 from qa.store import SessionRecord, TurnRecord
 
@@ -84,6 +85,11 @@ class HistoryPage(QWidget):
         self._body = QTextEdit(self)
         self._body.setObjectName("historyBody")
         self._body.setReadOnly(True)
+        # 只读回看：禁止划选。划选既不能复制，又和滚动条抢手。
+        self._body.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        self._body.setCursor(Qt.CursorShape.ArrowCursor)
+        self._body.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self._body.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         split = QSplitter(Qt.Orientation.Horizontal, self)
         split.addWidget(self._list)
         split.addWidget(self._body)
@@ -200,9 +206,4 @@ class HistoryPage(QWidget):
         if not turns:
             self._body.setPlainText("还没有问答")
             return
-        chunks: list[str] = []
-        for turn in turns:
-            chunks.append(
-                f"用户\n{turn.user_text}\n\n助手\n{turn.assistant_text}"
-            )
-        self._body.setPlainText("\n\n".join(chunks))
+        self._body.setHtml(history_body_html(turns))

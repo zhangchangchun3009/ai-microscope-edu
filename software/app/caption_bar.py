@@ -40,7 +40,7 @@ class CaptionBar(QWidget):
         self._label.setObjectName("captionText")
         self._label.setWordWrap(True)
         self._label.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)

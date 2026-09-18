@@ -12,7 +12,7 @@
 
 - 规格：[`docs/superpowers/specs/2026-09-14-edu-settings-design.md`](../specs/2026-09-14-edu-settings-design.md)。只改 `ai-microscope-edu/`。
 - 设置走现壳，不藏工具条、不做半屏滑入。
-- 缺省旋转 **90**。密钥界面不回显明文。混音器通路不进 UI。
+- 缺省旋转 **90**。密钥界面保存后不回显明文，填写时可用显示钮。混音器通路不进 UI。
 - 当前验证屏偏小（约 5 寸、高 DPI）：分界线 **32 px**（spec ≥24），设置控件高度 **56 px**（spec ≥44）。工具条圆钮直径本刀不改。
 - Mac：`cd ai-microscope-edu/software && PYTHONPATH=. /usr/bin/python3 -m pytest tests/ --ignore=tests/test_ai_fab.py -q`
 - 未经用户明确要求不要 `git commit`。下列 Commit 步骤一律跳过。

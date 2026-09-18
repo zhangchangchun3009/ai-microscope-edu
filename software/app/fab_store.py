@@ -1,4 +1,4 @@
-"""浮标位置落盘；无版本或损坏时回退到右侧居中。"""
+"""浮标位置落盘；无版本或损坏时回退到预览 80%/80%。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 
-from app.shell_state import FabPos, default_fab_pos
+from app.shell_state import FabPos, default_fab_pos, place_fab
 
 # 首版 JSON 只有 x/y，默认在左上角。v>=2 才信任已保存坐标。
 FAB_FILE_VERSION = 2
@@ -38,8 +38,8 @@ def load_fab(path: Path, *, width: float, height: float) -> FabPos:
         height: 当前预览高度。
 
     返回：
-        夹紧在预览边界内的坐标；文件缺失、损坏、无版本或字段无效时
-        返回右侧居中默认值。
+        夹紧在预览边界内的坐标；文件缺失、损坏、无版本、字段无效或
+        对当前预览越界时，回到 80%/80% 锚点。
     """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -52,4 +52,4 @@ def load_fab(path: Path, *, width: float, height: float) -> FabPos:
         pos = FabPos(x, y)
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         pos = default_fab_pos(width, height)
-    return pos.clamped(width, height)
+    return place_fab(pos, width, height)
