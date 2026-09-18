@@ -1,2 +1,7 @@
 # 板端 kiosk 探测与后续 UI。Mac 上也可装，窗口走系统桌面而非 eglfs。
-PySide6-Essentials>=6.6
+# Addons 含与 Essentials 同版本的 Qt VirtualKeyboard .so；Debian 6.4 包不要混用。
+# 6.8.1+ aarch64 轮子要 glibc 2.39，Debian 12 板钉在 6.8.0.2。
+PySide6-Essentials==6.8.0.2
+PySide6-Addons==6.8.0.2
+ruamel.yaml>=0.18
+cryptography>=42
