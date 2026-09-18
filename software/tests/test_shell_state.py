@@ -19,6 +19,7 @@ from app.shell_state import (  # noqa: E402
     Overlay,
     RightPanel,
     SPLIT_DEFAULT,
+    SPLIT_HANDLE_PX,
     ShellState,
     classify_fab_gesture,
     default_fab_pos,
@@ -74,9 +75,16 @@ def test_fusion_stitch_history_settings_open_split() -> None:
         assert s.right_panel is panel
         assert s.split_open is True
         assert s.overlay is Overlay.NONE
+        assert s.strip_expanded is True
     s.close_right()
     assert s.split_open is False
     assert s.right_panel is RightPanel.NONE
+    assert s.strip_expanded is True
+
+
+def test_split_handle_meets_touch_minimum() -> None:
+    """分界线命中宽度至少 24 px，供十寸触屏拖动。"""
+    assert SPLIT_HANDLE_PX >= 24
 
 
 def test_split_ratio_clamped() -> None:
@@ -87,6 +95,11 @@ def test_split_ratio_clamped() -> None:
     assert s.split_ratio == pytest.approx(0.75)
     s.set_split_ratio(0.4)
     assert s.split_ratio == pytest.approx(0.4)
+
+
+def test_fab_size_is_easy_to_touch() -> None:
+    """语音浮标加大，方便点触（对照 mipi-hmi 列表钮 96）。"""
+    assert FAB_SIZE >= 96
 
 
 def test_fab_clamped_inside_preview() -> None:

@@ -20,8 +20,16 @@ Environment=EDU_TTS_VOCODER=/home/cat/ai-microscope-edu/models/vocos-22khz-univ.
 # 后续接通硬件加速时再验证 Mali GBM + eglfs（见 README）。
 Environment=QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0
 Environment=QT_QPA_FB_HIDECURSOR=1
+# 避免 Debian Qt 6.4 的 libQt6VirtualKeyboard 抢在 PySide 6.8 前面。
+Environment=LD_LIBRARY_PATH=/home/cat/ai-microscope-edu/.venv/lib/python3.11/site-packages/PySide6/Qt/lib
+Environment=QT_IM_MODULE=qtvirtualkeyboard
+Environment=QT_VIRTUALKEYBOARD_DESKTOP_DISABLE=1
+Environment=QT_QUICK_BACKEND=software
+Environment=LANG=zh_CN.UTF-8
+Environment=QT_VIRTUALKEYBOARD_AVAILABLE_LOCALES=zh_CN,zh_TW,en_US
 ExecStartPre=+/usr/bin/sh -c 'echo 0 > /sys/class/vtconsole/vtcon1/bind || true'
 ExecStart=/home/cat/ai-microscope-edu/.venv/bin/python -m app
+ExecStartPost=/home/cat/ai-microscope-edu/software/deploy/edu-mixer.sh
 Restart=on-failure
 RestartSec=3
 

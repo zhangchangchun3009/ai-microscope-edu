@@ -17,6 +17,9 @@ from qa.config import (
     DEFAULT_DEVICE_SECRET_HOSTS,
     DEFAULT_LLM_TIMEOUT_S,
 )
+from system.device_id import read_cpu_serial
+from system.edu_config import load_edu
+from system.secret_box import decrypt_secret
 
 
 class QaClientError(Exception):
@@ -45,36 +48,39 @@ class LlmConfig:
     device_secret_hosts: tuple[str, ...] = ()
 
 
-def load_llm_config(path: Path, environ: Mapping[str, str]) -> LlmConfig | None:
-    """从 json 文件与环境变量组装 LLM 配置。
+def load_llm_config(
+    path: Path,
+    environ: Mapping[str, str],
+    *,
+    serial: str | None = None,
+) -> LlmConfig | None:
+    """从 ``edu.yaml`` 的 ``llm`` 段与环境变量组装 LLM 配置。
 
     参数:
-        path: ``llm.json`` 路径，或存放该文件的目录。
+        path: ``edu.yaml`` 文件，或含该文件的目录，或 ``var/`` 目录
+            （读其中的 ``edu.yaml``）。运行时不读 ``llm.json``。
         environ: 环境映射；``EDU_LLM_BASE_URL`` / ``EDU_LLM_API_KEY`` /
-            ``EDU_LLM_MODEL`` 覆盖 json 同名字段。``EDU_LLM_DEVICE_SECRET`` /
+            ``EDU_LLM_MODEL`` 覆盖 yaml 同名字段。``EDU_LLM_DEVICE_SECRET`` /
             ``EDU_LLM_DEVICE_SECRET_HOSTS``（逗号分隔）覆盖网关暗号与白名单。
+        serial: 解密 ``enc1:`` 用的 CPU 序列号；``None`` 时读本机。
 
     返回值:
         三件套（base_url、api_key、model）均非空时返回配置；否则 ``None``。
-        超时取 json 的 ``timeout_secs``（或 ``timeout_s``），缺省
+        超时取 yaml ``llm.timeout_secs``（或 ``timeout_s``），缺省
         ``DEFAULT_LLM_TIMEOUT_S``。未写 ``device_secret`` 时用 MicroClaw
-        缺省暗号；json 里显式空串则禁用该头。
+        缺省暗号；yaml 里显式空串则禁用该头。``enc1:`` 解密失败时该密钥
+        当空（因此缺三件套则整份 ``None``），绝不把乱码当 Bearer。
 
     副作用:
-        若 ``path`` 指向存在的文件则读盘。
+        若解析到存在的 ``edu.yaml`` 则读盘；未传入 ``serial`` 且需要解密
+        时读取设备序列号。
     """
-    data: dict[str, Any] = {}
-    file_path = path / "llm.json" if path.is_dir() else path
-    if file_path.is_file():
-        try:
-            loaded = json.loads(file_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            loaded = None
-        if isinstance(loaded, dict):
-            data = loaded
+    yaml_path = _resolve_edu_yaml(path)
+    data = dict(load_edu(yaml_path).llm)
+    serial_key = serial if serial is not None else read_cpu_serial()
 
     base_url = str(environ.get("EDU_LLM_BASE_URL") or data.get("base_url") or "").strip()
-    api_key = str(environ.get("EDU_LLM_API_KEY") or data.get("api_key") or "").strip()
+    api_key = _read_api_key(data, environ, serial_key)
     model = str(environ.get("EDU_LLM_MODEL") or data.get("model") or "").strip()
     timeout_raw = data.get("timeout_secs", data.get("timeout_s", DEFAULT_LLM_TIMEOUT_S))
     try:
@@ -89,7 +95,7 @@ def load_llm_config(path: Path, environ: Mapping[str, str]) -> LlmConfig | None:
         api_key=api_key,
         model=model,
         timeout_s=timeout_s,
-        device_secret=_read_device_secret(data, environ),
+        device_secret=_read_device_secret(data, environ, serial_key),
         device_secret_hosts=_read_device_secret_hosts(data, environ),
     )
 
@@ -155,6 +161,41 @@ def iter_chat_tokens(
         raise QaClientError(str(exc)) from exc
 
 
+def complete_once(
+    config: LlmConfig | None,
+    messages: list[dict[str, str]],
+    *,
+    timeout_s: float,
+) -> str:
+    """发一次非流式 ``chat/completions``，返回助手全文。
+
+    参数:
+        config: ``load_llm_config`` 的结果；``None`` 或缺字段视为失败。
+        messages: OpenAI 风格 ``role`` / ``content`` 列表。
+        timeout_s: 本次请求超时秒数，覆盖 ``config.timeout_s``。
+
+    返回值:
+        助手 ``content`` 拼接；失败（无配置、超时、HTTP/解析错误）返回
+        空串，不向调用方抛出。
+
+    副作用:
+        向 ``{base_url}/chat/completions`` 发 ``stream=false`` 的 POST
+        （``enable_thinking`` 恒为 false）。
+    """
+    if config is None or not _config_ready(config):
+        return ""
+    url = _completions_url(config.base_url)
+    try:
+        with _post_chat(
+            config, url, messages, stream=False, timeout_s=timeout_s
+        ) as resp:
+            return "".join(_iter_nonstream(resp))
+    except QaClientError:
+        return ""
+    except Exception:
+        return ""
+
+
 def _config_ready(config: LlmConfig) -> bool:
     """三件套均非空才可发请求。"""
     return bool(config.base_url.strip() and config.api_key.strip() and config.model.strip())
@@ -174,6 +215,7 @@ def _post_chat(
     messages: list[dict[str, str]],
     *,
     stream: bool,
+    timeout_s: float | None = None,
 ) -> Any:
     """构造并发送 JSON POST。必须 ``import urllib.request`` 以便单测 patch。"""
     payload = {
@@ -193,15 +235,49 @@ def _post_chat(
         headers=headers,
         method="POST",
     )
-    return urllib.request.urlopen(req, timeout=config.timeout_s)
+    timeout = config.timeout_s if timeout_s is None else timeout_s
+    return urllib.request.urlopen(req, timeout=timeout)
 
 
-def _read_device_secret(data: Mapping[str, Any], environ: Mapping[str, str]) -> str:
-    """环境变量优先，其次 json；都未写则用 MicroClaw 缺省暗号。"""
+def _resolve_edu_yaml(path: Path) -> Path:
+    """把 path 规范成 ``edu.yaml`` 文件路径（目录则取其下的该文件）。"""
+    if path.is_dir():
+        return path / "edu.yaml"
+    return path
+
+
+def _decrypt_yaml_secret(raw: object, serial: str) -> str:
+    """解密 yaml 密钥；非 enc1 透传，失败当空串。"""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    try:
+        return decrypt_secret(text, serial).strip()
+    except ValueError:
+        return ""
+
+
+def _read_api_key(
+    data: Mapping[str, Any],
+    environ: Mapping[str, str],
+    serial: str,
+) -> str:
+    """``EDU_LLM_API_KEY`` 出现在环境中则用它且不解密 yaml。"""
+    if "EDU_LLM_API_KEY" in environ:
+        return str(environ.get("EDU_LLM_API_KEY") or "").strip()
+    return _decrypt_yaml_secret(data.get("api_key"), serial)
+
+
+def _read_device_secret(
+    data: Mapping[str, Any],
+    environ: Mapping[str, str],
+    serial: str,
+) -> str:
+    """环境变量优先，其次 yaml（enc1 解密）；都未写则用 MicroClaw 缺省暗号。"""
     if "EDU_LLM_DEVICE_SECRET" in environ:
         return str(environ.get("EDU_LLM_DEVICE_SECRET") or "").strip()
     if "device_secret" in data:
-        return str(data.get("device_secret") or "").strip()
+        return _decrypt_yaml_secret(data.get("device_secret"), serial)
     return DEFAULT_DEVICE_SECRET
 
 
@@ -209,7 +285,7 @@ def _read_device_secret_hosts(
     data: Mapping[str, Any],
     environ: Mapping[str, str],
 ) -> tuple[str, ...]:
-    """环境变量或 json 覆盖白名单；未写则 ``www.aiinstrum.com``。"""
+    """环境变量或 yaml 覆盖白名单；未写则 ``www.aiinstrum.com``。"""
     if "EDU_LLM_DEVICE_SECRET_HOSTS" in environ:
         return _split_hosts(str(environ.get("EDU_LLM_DEVICE_SECRET_HOSTS") or ""))
     if "device_secret_hosts" in data:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from qa.config import QA_ROLE_CORE, USER_MD_MAX_CHARS
 
@@ -45,3 +46,43 @@ def build_user_message(knowledge: str, user_text: str) -> str:
     if not block:
         return user_text
     return f"{block.rstrip()}\n{user_text}"
+
+
+def load_user_md(path: Path) -> str:
+    """读取 ``USER.md`` 全文；缺文件或读失败当空串。
+
+    参数:
+        path: ``var/qa/USER.md`` 路径。
+
+    返回值:
+        文件 UTF-8 原文；不截断（注入上限由 :func:`build_system_prompt` 处理）。
+
+    副作用:
+        若文件存在则读盘。
+    """
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def save_user_md(path: Path, text: str) -> None:
+    """把自定义问答助手正文写入 ``USER.md``。
+
+    参数:
+        path: 目标路径；父目录不存在时创建。
+        text: 要落盘的全文（磁盘可不截断）。
+
+    返回值:
+        无。
+
+    副作用:
+        覆盖 ``path``；必要时 ``mkdir`` 父目录。
+
+    异常:
+        ``OSError``: 写盘失败，由调用方提示，不假装已保存。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")

@@ -1,4 +1,4 @@
-"""右栏占位页。本计划不实现向导/历史/设置表单。"""
+"""右栏占位页。融合 / 拼接本计划不实现向导。"""
 
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ from app.shell_state import RightPanel
 _TITLES = {
     RightPanel.FUSION: "融合（下期）",
     RightPanel.STITCH: "拼接（下期）",
-    RightPanel.HISTORY: "历史（下期）",
-    RightPanel.SETTINGS: "设置（下期）",
 }
 
 
@@ -26,6 +24,19 @@ class StubPage(QWidget):
         on_close: Callable[[], None],
         parent: QWidget | None = None,
     ) -> None:
+        """按右栏种类显示占位标题与关闭钮。
+
+        参数:
+            panel: 融合 / 拼接之一；历史与设置页不再走本类。
+            on_close: 点「关闭」时退出分屏。
+            parent: 父控件。
+
+        返回:
+            无。
+
+        副作用:
+            构建占位控件；点「关闭」会调用 ``on_close``。
+        """
         super().__init__(parent)
         self.setObjectName("stubPage")
         layout = QVBoxLayout(self)

@@ -27,7 +27,7 @@ ASR / TTS 照搬旧板端。本刀增量：**流式问答 + 分句队列 + 按�
 | 按句入队；**开播水位 2 句**，预取目标 **3 句**；喇叭串行，不叠音 | 切出一句立刻播；多句并行 TTS |
 | `var/qa/USER.md` 若存在则截断 1000 字接到 system | 设置页编辑提示词 |
 | `KnowledgeRecall.lookup(text) -> str`，本刀恒返回 `""` | SQLite、FTS、导入、触屏知识库 |
-| 内存最近 **8** 轮；约 20 分钟无问答则新开一场 | 历史页、磁盘 20 场 |
+| 内存最近若干轮（`qa.context_turns`，缺省 8）；约 20 分钟无问答则新开一场 | 历史页与磁盘场次见 [`2026-09-18-edu-session-history-design.md`](2026-09-18-edu-session-history-design.md) |
 | 只发文本 | 当前帧 / ROI 识图 |
 | 后台线程：ASR、读 SSE、分句、TTS、`aplay` | GUI 线程阻塞 linuxfb |
 | 忙碌时浮标 **禁用** 直到空闲 | 只吞事件但浮标仍像能按 |

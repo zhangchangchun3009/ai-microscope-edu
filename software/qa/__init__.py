@@ -13,7 +13,7 @@ from qa.config import (
 )
 from qa.knowledge import EmptyRecall, KnowledgeRecall
 from qa.memory import QaMemory
-from qa.prompt import build_system_prompt, build_user_message
+from qa.prompt import build_system_prompt, build_user_message, load_user_md, save_user_md
 from qa.sentences import SentenceSplitter, merge_short_sentences, ready_to_play
 
 __all__ = [
@@ -35,6 +35,8 @@ __all__ = [
     "build_user_message",
     "iter_chat_tokens",
     "load_llm_config",
+    "load_user_md",
     "merge_short_sentences",
     "ready_to_play",
+    "save_user_md",
 ]

@@ -50,19 +50,25 @@ sudo systemctl restart edu-app
 
 ## LLM 与语音模型配置
 
-问答读 `software/var/qa/llm.json`（目录已 gitignore）。样例：
+问答与显示读 `software/var/edu.yaml`（`var/` 已 gitignore）。带注释样例：
 
 ```bash
-mkdir -p var/qa
-cp deploy/llm.json.example var/qa/llm.json
-# 再改 base_url / api_key / model；timeout_secs 缺省 30
+mkdir -p var
+cp deploy/edu.yaml.example var/edu.yaml
+# 再在设置页或手改 yaml：方向 / 字幕 / 音量 / llm 段
 ```
 
-字段：`base_url`、`api_key`、`model`、`timeout_secs`。三件套缺一则本轮 beep。可选 `device_secret` / `device_secret_hosts`（对照 MicroClaw：仅白名单 host 附加 `X-Device-Secret`；未写则用与 `config-default.toml` 相同的缺省）。可选 `var/qa/USER.md`（截断 1000 字接到 system）。
+密钥字段（`api_key` / `device_secret`）落盘为 `enc1:` 密文，由本机 CPU 序列号派生，换板不可解。设置页不回显明文；空输入表示保持原密文。
 
-**LLM 环境变量**：只有这三个会覆盖 `llm.json` 的同名字段（**没有** `EDU_LLM_TIMEOUT`；超时只认 json 的 `timeout_secs` / `timeout_s`）：
+`qa.retain_days`（启动时删过期非当前场）与 `qa.context_turns`（送给 LLM 的当前场最近轮数）可选手改 yaml，**重启进程生效**；本刀设置页不加滑条。缺省 7 天 / 8 轮。
 
-| 变量 | 覆盖 json 字段 |
+旧 `deploy/llm.json.example` 与 `var/qa/llm.json` **已废弃**。启动时若 yaml 尚无可用 `llm` 段且存在旧 json，会迁移一次（不删除 json）；之后只认 yaml。
+
+`USER.md` 仍独立：`var/qa/USER.md`（截断 1000 字接到 system）。
+
+**LLM 环境变量**：只要出现在进程环境就覆盖 yaml `llm` 段的同名字段并在设置页锁定（**没有** `EDU_LLM_TIMEOUT`；超时只认 yaml 的 `timeout_secs`）。当前 `edu-app.service` **不**设置这些变量。
+
+| 变量 | 覆盖 yaml 字段 |
 |------|------|
 | `EDU_LLM_BASE_URL` | `base_url` |
 | `EDU_LLM_API_KEY` | `api_key` |
@@ -70,7 +76,7 @@ cp deploy/llm.json.example var/qa/llm.json
 | `EDU_LLM_DEVICE_SECRET` | 覆盖 `device_secret`；空串禁用该头 |
 | `EDU_LLM_DEVICE_SECRET_HOSTS` | 逗号分隔覆盖 `device_secret_hosts` |
 
-**ASR / TTS 环境变量**：不涉及 `llm.json`；缺省指向本应用 `models/`（见 `voice/config.py` 与 `edu-app.service`）。文件不存在时识别为空、TTS 回退 Mock（短正弦，不是人声）。venv 需要 `sherpa-onnx==1.13.2`。
+**ASR / TTS 环境变量**：不涉及 yaml；缺省指向本应用 `models/`（见 `voice/config.py` 与 `edu-app.service`）。文件不存在时识别为空、TTS 回退 Mock（短正弦，不是人声）。venv 需要 `sherpa-onnx==1.13.2`。
 
 | 变量 | 板上缺省 |
 |------|------|
@@ -80,22 +86,40 @@ cp deploy/llm.json.example var/qa/llm.json
 | `EDU_TTS_MODEL_DIR` | `models/matcha-icefall-zh-baker` |
 | `EDU_TTS_VOCODER` | `models/vocos-22khz-univ.onnx` |
 
-## 211 同步与手测
+## 211 安装、同步与手测
 
-在 Mac 仓库的 `ai-microscope-edu/` 下用本文开头「板端路径」一节的 `rsync` 同步（不要重复维护两份命令）。
+在 Mac 仓库的 `ai-microscope-edu/` 下用本文开头「板端路径」一节的 `rsync` 同步（不要重复维护两份命令；**不要 rsync 覆盖 `var/`**）。**235 只读对照，不部署。**
 
-板上：放入 `var/qa/llm.json`（不要 rsync 覆盖 var）。ASR/TTS 已指向本应用 `models/`，不必再引用旧 `microscope/`。重启后重设混音器（spk / Line 2 / PGA 24dB / Output 24，TTS 另有软件增益 0.5）：
+板上 venv 补依赖：
 
 ```bash
-sudo systemctl restart edu-app
-amixer -c 0 sset Speaker on
-amixer -c 0 sset "spk switch" on
-amixer -c 0 sset "Differential Mux" "Line 2"
-amixer -c 0 sset "Left Channel" 8
-amixer -c 0 sset "Right Channel" 8
-amixer -c 0 sset "Output 1" 24
-amixer -c 0 sset "Output 2" 24
-amixer -c 0 sset PCM 100%
+cd /home/cat/ai-microscope-edu/software
+/home/cat/ai-microscope-edu/.venv/bin/pip install -r requirements.txt
 ```
 
-重启会冲掉混音器，必须在 `restart` **之后**再跑 `amixer`。
+虚拟键盘走 **PySide6-Addons**（与 Essentials **同版本** 的 Qt VirtualKeyboard，含拼音）。`pip install -r requirements.txt` 会装上。**不要**再 `apt` 装 Debian Qt 6.4 的 `qml6-module-qtquick-virtualkeyboard`：版本对不上，InputPanel 会缺 `libQt6VirtualKeyboardSettings.so.6`。
+
+验收：设置 → 自定义问答助手，点编辑框应弹出内嵌键盘，拼音拼出「洋葱」。
+
+安装 unit 与混音器脚本后重载：
+
+```bash
+sudo cp /home/cat/ai-microscope-edu/software/deploy/edu-app.service /etc/systemd/system/edu-app.service
+chmod +x /home/cat/ai-microscope-edu/software/deploy/edu-mixer.sh
+sudo systemctl daemon-reload && sudo systemctl restart edu-app
+```
+
+重启后 **不要** 再手跑 `amixer`。`ExecStartPost` 跑 `deploy/edu-mixer.sh` 写固定通路（Speaker、spk switch、Line 2、Channel 8、PCM）；进程 `main()` 再写通路，并按 `var/edu.yaml` 的 `audio.volume_pct` 写 Output 1/2（缺省 73→24）。Mac 无 `amixer` 时启动仍可用。`TTS_GAIN = 0.5` 不进 UI。
+
+手测清单（规格 §12）：
+
+1. 点设置：左预览右设置，工具条仍在；浮标在预览上能 PTT；手指能拖中间分界线改比例；关闭后全屏。
+2. 无 yaml 首启即为 **90° 横屏**；点 0° 立刻竖过来且触点跟手；重启保持。
+3. `restart edu-app` 后 PTT 有声，不必手跑 amixer；滑条能改变响度。
+4. 设置里字幕 **开/关** 钮：打开后 ASR 出字即显（两行）；回答后句顶前句；播完底栏消失，不留到下一问。
+5. USER.md 能用拼音输入汉字，并能切到英文。
+6. 填 LLM key 保存后 yaml 为 `enc1:`，设置页看不到明文；把该 yaml 拷到另一台（或改测试 serial）下一问 beep，重填后恢复。
+7. 改 USER.md 下一问能听出效果。
+8. 问一句后打开「历史」：列表有当前场（旁注「当前」），右侧能看见该轮用户/助手正文。
+9. 说「新对话」或点历史页按钮：喇叭「已处于新对话」；列表多一场或标题回到「新对话」。忙碌时点按钮可忽略。
+10. 点旧场只能看、不能续聊；再按住说话仍写入带「当前」标记的那一场。库打不开时历史页提示「无法读取」，问答仍走内存轮次。

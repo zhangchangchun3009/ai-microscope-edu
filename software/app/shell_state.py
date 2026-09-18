@@ -8,8 +8,10 @@ from enum import Enum
 SPLIT_MIN = 0.25
 SPLIT_MAX = 0.75
 SPLIT_DEFAULT = 0.5
+# 分界线命中宽度：spec ≥24 px；验证屏偏小，本刀用 32。
+SPLIT_HANDLE_PX = 32
 FAB_MARGIN = 8.0
-FAB_SIZE = 72.0
+FAB_SIZE = 96.0
 DRAG_THRESHOLD_PX = 24.0
 PTT_HOLD_S = 0.35
 

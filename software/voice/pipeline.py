@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+from collections.abc import Callable
 from typing import Literal
 
 from voice.alsa import AudioPlayback
@@ -28,6 +29,7 @@ class SentencePlayer:
         sample_rate: 交给 aplay 前的 PCM 采样率（Matcha 为 22050）。
         gain: 合成后线性增益，1.0 为原电平。
         prefetch: 未播 PCM 队列上限，让合成领先播放 2～3 句。
+        on_play_start: 某句即将 aplay 时回调 ``(text, duration_s)``；可在播放线程调用。
 
     副作用:
         构造即启动守护线程；``close()`` 等待两线程结束。
@@ -42,14 +44,17 @@ class SentencePlayer:
         sample_rate: int = TTS_RATE,
         gain: float = TTS_GAIN,
         prefetch: int = TTS_PCM_PREFETCH,
+        on_play_start: Callable[[str, float], None] | None = None,
     ) -> None:
         self._tts = tts
         self._playback = playback
         self._cancel = cancel
         self._sample_rate = int(sample_rate)
         self._gain = float(gain)
+        self._on_play_start = on_play_start
         self._text_q: queue.Queue[str | None] = queue.Queue()
-        self._pcm_q: queue.Queue[bytes | None] = queue.Queue(
+        # (句文本, PCM)；结束标记仍为 None。
+        self._pcm_q: queue.Queue[tuple[str, bytes] | None] = queue.Queue(
             maxsize=max(1, int(prefetch))
         )
         self._played = 0
@@ -122,7 +127,7 @@ class SentencePlayer:
                 if self._gain != 1.0:
                     pcm = scale_pcm(pcm, self._gain)
                 try:
-                    self._pcm_q.put(pcm, timeout=_JOIN_S)
+                    self._pcm_q.put((item, pcm), timeout=_JOIN_S)
                 except queue.Full:
                     self._failed = True
                     return
@@ -140,8 +145,36 @@ class SentencePlayer:
                 return
             if self._cancel.is_set() or self._failed:
                 continue
-            if not self._playback.play_pcm(item, sample_rate=self._sample_rate):
+            text, pcm = item
+            duration_s = pcm_duration_s(pcm, self._sample_rate)
+            self._emit_play_start(text, duration_s)
+            if not self._playback.play_pcm(pcm, sample_rate=self._sample_rate):
                 _LOG.error("TTS 播放失败")
                 self._failed = True
                 continue
             self._played += 1
+
+    def _emit_play_start(self, text: str, duration_s: float) -> None:
+        """通知字幕：该句即将开口。异常只记日志。"""
+        cb = self._on_play_start
+        if cb is None:
+            return
+        try:
+            cb(text, duration_s)
+        except Exception:
+            _LOG.exception("on_play_start 失败")
+
+
+def pcm_duration_s(pcm: bytes, sample_rate: int) -> float:
+    """单声道 s16le PCM 的时长（秒）。
+
+    参数:
+        pcm: 16-bit LE 单声道字节。
+        sample_rate: 采样率。
+
+    返回:
+        秒；空数据或非法采样率为 0。
+    """
+    if not pcm or sample_rate <= 0:
+        return 0.0
+    return len(pcm) / (2.0 * float(sample_rate))

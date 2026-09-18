@@ -128,14 +128,28 @@ def test_iter_chat_tokens_parses_sse_and_disables_thinking() -> None:
     assert body["messages"] == _MESSAGES
 
 
+_EDU_LLM_YAML = (
+    "llm:\n"
+    "  base_url: https://json.example.com/v1\n"
+    "  api_key: sk-json\n"
+    "  model: json-model\n"
+    "  timeout_secs: 45\n"
+)
+
+
+def _write_edu_yaml(path: Path, body: str = _EDU_LLM_YAML) -> Path:
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
 def test_load_llm_config_empty_dir_returns_none(tmp_path: Path) -> None:
-    assert load_llm_config(tmp_path / "llm.json", {}) is None
+    assert load_llm_config(tmp_path / "edu.yaml", {}) is None
     assert load_llm_config(tmp_path, {}) is None
 
 
 def test_load_llm_config_from_env_trio(tmp_path: Path) -> None:
     cfg = load_llm_config(
-        tmp_path / "llm.json",
+        tmp_path / "edu.yaml",
         {
             "EDU_LLM_BASE_URL": "https://api.example.com/v1",
             "EDU_LLM_API_KEY": "sk-env",
@@ -149,19 +163,8 @@ def test_load_llm_config_from_env_trio(tmp_path: Path) -> None:
     assert cfg.timeout_s == DEFAULT_LLM_TIMEOUT_S
 
 
-def test_load_llm_config_env_overrides_json(tmp_path: Path) -> None:
-    path = tmp_path / "llm.json"
-    path.write_text(
-        json.dumps(
-            {
-                "base_url": "https://json.example.com/v1",
-                "api_key": "sk-json",
-                "model": "json-model",
-                "timeout_secs": 45,
-            }
-        ),
-        encoding="utf-8",
-    )
+def test_load_llm_config_env_overrides_yaml(tmp_path: Path) -> None:
+    path = _write_edu_yaml(tmp_path / "edu.yaml")
     cfg = load_llm_config(
         path,
         {
@@ -175,6 +178,68 @@ def test_load_llm_config_env_overrides_json(tmp_path: Path) -> None:
     assert cfg.api_key == "sk-env"
     assert cfg.model == "env-model"
     assert cfg.timeout_s == 45.0
+
+
+def test_load_llm_config_from_dir_or_var(tmp_path: Path) -> None:
+    """目录含 edu.yaml，或名为 var 的目录，都读其中的 yaml。"""
+    _write_edu_yaml(tmp_path / "edu.yaml")
+    from_dir = load_llm_config(tmp_path, {})
+    assert from_dir is not None
+    assert from_dir.api_key == "sk-json"
+    assert from_dir.base_url == "https://json.example.com/v1"
+
+    var_dir = tmp_path / "var"
+    var_dir.mkdir()
+    _write_edu_yaml(var_dir / "edu.yaml")
+    from_var = load_llm_config(var_dir, {})
+    assert from_var is not None
+    assert from_var.model == "json-model"
+
+
+def test_load_llm_config_decrypt_failure_returns_none(tmp_path: Path) -> None:
+    """enc1 解密失败时该 key 当空，缺三件套则整份 None，不得把乱码当 Bearer。"""
+    path = _write_edu_yaml(
+        tmp_path / "edu.yaml",
+        "llm:\n"
+        "  base_url: https://json.example.com/v1\n"
+        "  api_key: enc1:00\n"
+        "  model: json-model\n",
+    )
+    assert load_llm_config(path, {}, serial="x") is None
+
+
+def test_load_llm_config_decrypts_enc1_api_key(tmp_path: Path) -> None:
+    from system.secret_box import encrypt_secret
+
+    token = encrypt_secret("sk-live", "serial-a")
+    path = _write_edu_yaml(
+        tmp_path / "edu.yaml",
+        "llm:\n"
+        "  base_url: https://json.example.com/v1\n"
+        f"  api_key: {token}\n"
+        "  model: json-model\n",
+    )
+    cfg = load_llm_config(path, {}, serial="serial-a")
+    assert cfg is not None
+    assert cfg.api_key == "sk-live"
+
+
+def test_load_llm_config_env_api_key_skips_yaml_decrypt(tmp_path: Path) -> None:
+    """进程环境出现 EDU_LLM_API_KEY 时不解密 yaml 里的 enc1。"""
+    path = _write_edu_yaml(
+        tmp_path / "edu.yaml",
+        "llm:\n"
+        "  base_url: https://json.example.com/v1\n"
+        "  api_key: enc1:00\n"
+        "  model: json-model\n",
+    )
+    cfg = load_llm_config(
+        path,
+        {"EDU_LLM_API_KEY": "sk-env"},
+        serial="x",
+    )
+    assert cfg is not None
+    assert cfg.api_key == "sk-env"
 
 
 def test_iter_chat_tokens_timeout_raises() -> None:
@@ -262,16 +327,12 @@ def test_load_llm_config_defaults_device_gateway_like_microclaw(tmp_path: Path) 
     """未写 device_secret 时用 MicroClaw 缺省暗号，仅白名单 host 会带头。"""
     from qa.config import DEFAULT_DEVICE_SECRET, DEFAULT_DEVICE_SECRET_HOSTS
 
-    path = tmp_path / "llm.json"
-    path.write_text(
-        json.dumps(
-            {
-                "base_url": "https://www.aiinstrum.com/api-micro-llm/v1",
-                "api_key": "sk-json",
-                "model": "qwen-plus",
-            }
-        ),
-        encoding="utf-8",
+    path = _write_edu_yaml(
+        tmp_path / "edu.yaml",
+        "llm:\n"
+        "  base_url: https://www.aiinstrum.com/api-micro-llm/v1\n"
+        "  api_key: sk-json\n"
+        "  model: qwen-plus\n",
     )
     cfg = load_llm_config(path, {})
     assert cfg is not None
@@ -280,17 +341,13 @@ def test_load_llm_config_defaults_device_gateway_like_microclaw(tmp_path: Path) 
 
 
 def test_load_llm_config_empty_device_secret_disables_header(tmp_path: Path) -> None:
-    path = tmp_path / "llm.json"
-    path.write_text(
-        json.dumps(
-            {
-                "base_url": "https://www.aiinstrum.com/v1",
-                "api_key": "sk-json",
-                "model": "qwen-plus",
-                "device_secret": "",
-            }
-        ),
-        encoding="utf-8",
+    path = _write_edu_yaml(
+        tmp_path / "edu.yaml",
+        "llm:\n"
+        "  base_url: https://www.aiinstrum.com/v1\n"
+        "  api_key: sk-json\n"
+        "  model: qwen-plus\n"
+        '  device_secret: ""\n',
     )
     cfg = load_llm_config(path, {})
     assert cfg is not None

@@ -25,8 +25,9 @@ import app.main_window as main_window  # noqa: E402
 class _VoiceSession:
     """记录主窗对语音会话的构造和调用。"""
 
-    def __init__(self, capture: object, playback: object, wav_path: Path) -> None:
+    def __init__(self, capture: object, playback: object, wav_path: Path, **kwargs: object) -> None:
         self.args = (capture, playback, wav_path)
+        self.kwargs = kwargs
         self.calls: list[str] = []
         self.stop_ident: int | None = None
         self.tick_ident: int | None = None
@@ -40,6 +41,13 @@ class _VoiceSession:
         self._busy = False
         self._would_auto_stop = False
         self.leave_input_enabled = True
+        self.announce_ident: int | None = None
+
+    def announce_new_session(self) -> str:
+        """记录切场播报；主窗必须在工作线程调用，不得在 GUI 线程 TTS。"""
+        self.calls.append("announce")
+        self.announce_ident = threading.get_ident()
+        return "played"
 
     def input_enabled(self) -> bool:
         """模拟会话：仅回合中为 False。"""
@@ -89,6 +97,40 @@ class _VoiceSession:
         self._input_enabled = self.leave_input_enabled
 
 
+class _DummyQa:
+    """避免主窗测试写真实 sqlite；提供历史页与 reload_llm 所需方法。"""
+
+    def __init__(self) -> None:
+        self.reload_calls = 0
+        self.list_calls = 0
+        self.current_calls = 0
+        self.start_calls = 0
+
+    def reload_llm(self) -> None:
+        """记录设置页保存后的刷新。"""
+        self.reload_calls += 1
+
+    def list_sessions(self) -> list[object]:
+        """空库：历史页按无法读取处理。"""
+        self.list_calls += 1
+        return []
+
+    def list_turns(self, session_id: str) -> list[object]:
+        """无轮次。"""
+        del session_id
+        return []
+
+    def current_session_id(self) -> None:
+        """无可用库。"""
+        self.current_calls += 1
+        return None
+
+    def start_new_session(self) -> None:
+        """历史列表点击不得走到这里；按钮走 announce。"""
+        self.start_calls += 1
+        return None
+
+
 @pytest.fixture
 def app() -> QApplication:
     """返回测试进程唯一的 QApplication。"""
@@ -98,7 +140,7 @@ def app() -> QApplication:
 def _make_window(
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[main_window.MainWindow, object, object]:
-    """构造接到假会话的主窗，并返回注入的采集/播放端口。"""
+    """构造接到假会话与假问答的主窗，并返回注入的采集/播放端口。"""
     capture = object()
     playback = object()
     monkeypatch.setattr(
@@ -108,7 +150,7 @@ def _make_window(
         raising=False,
     )
     monkeypatch.setattr(main_window, "VoiceSession", _VoiceSession, raising=False)
-    return main_window.MainWindow(), capture, playback
+    return main_window.MainWindow(qa=_DummyQa()), capture, playback
 
 
 def _wait_ptt_worker(window: main_window.MainWindow, app: QApplication) -> None:
@@ -127,6 +169,10 @@ def test_main_window_wires_fab_timer_and_close_to_voice(
     window, capture, playback = _make_window(monkeypatch)
     expected_wav = _SOFTWARE / "var" / "voice" / "last.wav"
     assert window._voice.args == (capture, playback, expected_wav)
+    assert callable(window._voice.kwargs.get("on_asr"))
+    assert callable(window._voice.kwargs.get("on_assistant_sentence"))
+    assert callable(window._voice.kwargs.get("on_captions_clear"))
+    assert window._preview.caption_bar().isHidden()
     assert window._voice_timer.interval() == 200
     assert window._voice_timer.isActive() is True
 
@@ -317,4 +363,61 @@ def test_disabled_fab_uses_gray_not_ptt_colors(
     window._set_turning_ui(False)
     fill, _pen, _icon = fab._ring_colors()
     assert fill == DANGER
+    window.close()
+
+
+def test_rotate_host_close_aborts_embedded_voice(
+    app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """关 RotateHost 必须传到嵌入 MainWindow.closeEvent：abort 并停语音定时器。"""
+    from app.rotate_host import RotateHost
+
+    window, _, _ = _make_window(monkeypatch)
+    host = RotateHost()
+    host.set_content(window)
+    host.close()
+    app.processEvents()
+
+    assert "abort" in window._voice.calls
+    assert window._voice_timer.isActive() is False
+
+
+def test_main_window_injects_qa_and_reload_llm(
+    app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """主窗应把同一 QaService 注入语音，reload_llm 不再窥探 VoiceSession._qa。"""
+    window, _, _ = _make_window(monkeypatch)
+    assert window._voice.kwargs.get("qa") is window._qa
+    window._reload_llm()
+    assert window._qa.reload_calls == 1
+    window.close()
+
+
+def test_open_history_reloads_and_new_session_announces_off_gui(
+    app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """打开历史会刷新列表；「新对话」在工作线程 announce，不在 GUI 线程 TTS。"""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.shell_state import RightPanel
+
+    window, _, _ = _make_window(monkeypatch)
+    before = window._qa.current_calls
+    window._on_tool("history")
+    app.processEvents()
+    assert window._state.right_panel is RightPanel.HISTORY
+    assert window._qa.current_calls > before
+
+    gui_ident = threading.get_ident()
+    page = window._pages[RightPanel.HISTORY]
+    buttons = [btn for btn in page.findChildren(QPushButton) if btn.text() == "新对话"]
+    assert buttons
+    buttons[0].click()
+    _wait_ptt_worker(window, app)
+    assert "announce" in window._voice.calls
+    assert window._voice.announce_ident is not None
+    assert window._voice.announce_ident != gui_ident
     window.close()

@@ -31,6 +31,7 @@ class _ScriptQa:
         self._tokens = list(tokens)
         self._on_after_first = on_after_first
         self.turns: list[tuple[str, str]] = []
+        self.new_sessions = 0
 
     def iter_tokens(self, user_text: str) -> Iterator[str]:
         """按列表产出 token；第一段之后可回调。"""
@@ -43,6 +44,10 @@ class _ScriptQa:
     def append_turn(self, user: str, assistant: str) -> None:
         """记录成功写入的记忆。"""
         self.turns.append((user, assistant))
+
+    def start_new_session(self) -> None:
+        """记一次切场调用。"""
+        self.new_sessions += 1
 
 
 class _Tts:
@@ -206,16 +211,110 @@ def test_abort_flag_cleared_for_next_turn(tmp_path: Path) -> None:
 def test_qa_service_without_llm_yields_nothing(tmp_path: Path) -> None:
     from qa.turn import QaService
 
-    svc = QaService(qa_dir=tmp_path, environ={})
+    svc = QaService(qa_dir=tmp_path, environ={}, purge_on_start=False)
     assert list(svc.iter_tokens("细胞膜是什么")) == []
 
 
 def test_qa_service_append_turn_keeps_memory(tmp_path: Path) -> None:
     from qa.turn import QaService
 
-    svc = QaService(qa_dir=tmp_path, environ={})
+    svc = QaService(qa_dir=tmp_path, environ={}, purge_on_start=False)
     svc.append_turn("问", "答")
     assert svc.memory.messages() == [
         {"role": "user", "content": "问"},
         {"role": "assistant", "content": "答"},
     ]
+
+
+def test_new_session_utterance_skips_llm_and_speaks_fixed(tmp_path: Path) -> None:
+    qa = _ScriptQa(["不该出现"])
+    tts = _Tts()
+    sess, play = _make_session(
+        tmp_path, asr=lambda _p: "新对话", qa=qa, tts=tts
+    )
+    sess.start_ptt()
+    assert sess.stop_ptt() == "played"
+    assert qa.turns == []
+    assert getattr(qa, "new_sessions", 1) >= 1
+    assert tts.sentences == ["已处于新对话"]
+    assert play.played
+    assert make_beep_pcm() not in play.played
+
+
+def test_normal_question_still_hits_llm(tmp_path: Path) -> None:
+    qa = _ScriptQa(["这是洋葱表皮。"])
+    tts = _Tts()
+    sess, _play = _make_session(
+        tmp_path, asr=lambda _p: "洋葱表皮是什么", qa=qa, tts=tts
+    )
+    sess.start_ptt()
+    assert sess.stop_ptt() == "played"
+    assert qa.turns
+    assert "已处于新对话" not in tts.sentences
+
+
+def test_new_session_utterance_skips_on_asr_and_captions_fixed(
+    tmp_path: Path,
+) -> None:
+    """口令在 on_asr 之前拦截：用户字幕不出现，固定句走上字幕。"""
+    events: list[tuple] = []
+    qa = _ScriptQa(["不该出现"])
+    tts = _Tts()
+    play = MockPlayback()
+    sess = VoiceSession(
+        MockCapture(_tone(0.5)),
+        play,
+        tmp_path / "last.wav",
+        monotonic=lambda: 0.0,
+        asr=lambda _p: "  新会话。",
+        qa=qa,
+        tts=tts,
+        on_asr=lambda text: events.append(("asr", text)),
+        on_assistant_sentence=lambda text, *_a: events.append(("sent", text)),
+        on_captions_clear=lambda: events.append(("clear",)),
+    )
+    sess.start_ptt()
+    assert sess.stop_ptt() == "played"
+    assert qa.new_sessions == 1
+    assert qa.turns == []
+    assert not any(item[0] == "asr" for item in events)
+    assert ("sent", "已处于新对话") in events
+
+
+def test_new_session_tts_fail_beeps_without_llm(tmp_path: Path) -> None:
+    """切场成功但 TTS 失败：beep、不走 LLM、不写记忆。"""
+
+    class _FailTts:
+        def synthesize(self, text: str) -> bytes:
+            raise RuntimeError("tts boom")
+
+    qa = _ScriptQa(["不该出现"])
+    sess, play = _make_session(
+        tmp_path, asr=lambda _p: "新建对话", qa=qa, tts=_FailTts()
+    )
+    sess.start_ptt()
+    assert sess.stop_ptt() == "failed"
+    assert qa.new_sessions == 1
+    assert qa.turns == []
+    assert play.played[-1] == make_beep_pcm()
+
+
+def test_new_session_abort_before_fixed_tts_skips_speak(tmp_path: Path) -> None:
+    """固定句合成前若已 abort，则不 TTS、不 beep。"""
+
+    class _AbortingQa(_ScriptQa):
+        def start_new_session(self) -> None:
+            super().start_new_session()
+            sess.abort()
+
+    qa = _AbortingQa(["不该出现"])
+    tts = _Tts()
+    sess, play = _make_session(
+        tmp_path, asr=lambda _p: "新建会话", qa=qa, tts=tts
+    )
+    sess.start_ptt()
+    assert sess.stop_ptt() == "aborted"
+    assert qa.new_sessions == 1
+    assert tts.sentences == []
+    assert play.played == []
+    assert qa.turns == []

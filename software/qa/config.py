@@ -6,7 +6,12 @@ IDLE_NEW_SESSION_S = 20 * 60.0
 DEFAULT_LLM_TIMEOUT_S = 30.0
 PLAY_START_WATERMARK = 2
 SHORT_SENTENCE_CHARS = 8
-QA_ROLE_CORE = "你只回答生物学和显微镜观察相关的问题。\n当前时间：{datetime}"
+QA_ROLE_CORE = (
+    "你只回答生物学和显微镜观察相关的问题。\n"
+    "用户问句来自语音识别，可能有错字或错词；"
+    "请结合显微镜与生物学背景推测意图后再答。\n"
+    "当前时间：{datetime}"
+)
 # 对照 microclaw config-default.toml [microscope]；仅白名单 host 附加 X-Device-Secret。
 DEFAULT_DEVICE_SECRET = "Microclaw-2026-SuperSecr3t!"
 DEFAULT_DEVICE_SECRET_HOSTS = ("www.aiinstrum.com",)

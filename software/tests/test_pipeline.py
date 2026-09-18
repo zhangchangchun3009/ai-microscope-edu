@@ -53,6 +53,39 @@ def test_player_synthesizes_next_sentence_while_playing() -> None:
     assert len(play.played) == 2
 
 
+def test_on_play_start_fires_immediately_before_play_pcm() -> None:
+    """字幕应在 aplay 前触发，且顺序与播放句一致。"""
+    from voice.pipeline import pcm_duration_s
+
+    order: list[object] = []
+
+    class _Play(MockPlayback):
+        def play_pcm(self, pcm: bytes, sample_rate: int | None = None) -> bool:
+            order.append("play")
+            return super().play_pcm(pcm, sample_rate=sample_rate)
+
+    def _on_start(text: str, duration_s: float) -> None:
+        order.append(("start", text, duration_s > 0 or duration_s == 0))
+
+    tts = _Tts()
+    play = _Play()
+    cancel = threading.Event()
+    player = SentencePlayer(
+        tts, play, cancel, gain=1.0, prefetch=3, on_play_start=_on_start
+    )
+    player.submit("第一句。")
+    player.submit("第二句。")
+    assert player.close() == "played"
+    starts = [item for item in order if isinstance(item, tuple)]
+    plays = [item for item in order if item == "play"]
+    assert [item[1] for item in starts] == ["第一句。", "第二句。"]
+    assert order[0][0] == "start"
+    assert order[1] == "play"
+    assert len(plays) == 2
+    assert pcm_duration_s(b"\0\0" * 8, 22050) > 0
+
+
+
 def test_player_abort_during_first_synth_skips_play() -> None:
     cancel = threading.Event()
     tts = _Tts()

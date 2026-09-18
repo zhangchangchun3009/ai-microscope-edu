@@ -32,6 +32,7 @@ class _ScriptQa:
         else:
             self._tokens = list(tokens)
         self.turns: list[tuple[str, str]] = []
+        self.new_sessions = 0
 
     def iter_tokens(self, user_text: str) -> Iterator[str]:
         """逐段产出助手文本。"""
@@ -41,6 +42,10 @@ class _ScriptQa:
     def append_turn(self, user: str, assistant: str) -> None:
         """记录成功回合。"""
         self.turns.append((user, assistant))
+
+    def start_new_session(self) -> None:
+        """记一次切场调用。"""
+        self.new_sessions += 1
 
 
 class _RecordingTts:
@@ -63,6 +68,9 @@ def _session(
     asr=None,
     qa=None,
     tts=None,
+    on_asr=None,
+    on_assistant_sentence=None,
+    on_captions_clear=None,
 ) -> tuple[VoiceSession, MockPlayback]:
     play = MockPlayback()
     extra: dict[str, object] = {}
@@ -72,6 +80,12 @@ def _session(
         extra["qa"] = qa
     if tts is not None:
         extra["tts"] = tts
+    if on_asr is not None:
+        extra["on_asr"] = on_asr
+    if on_assistant_sentence is not None:
+        extra["on_assistant_sentence"] = on_assistant_sentence
+    if on_captions_clear is not None:
+        extra["on_captions_clear"] = on_captions_clear
     sess = VoiceSession(
         MockCapture(pcm, start_ok=start_ok),
         play,
@@ -80,6 +94,17 @@ def _session(
         **extra,
     )
     return sess, play
+
+
+def _caption_events() -> tuple[list[tuple], dict[str, object]]:
+    """收集字幕回调事件；键名与 VoiceSession 构造参数对齐。"""
+    events: list[tuple] = []
+    hooks = {
+        "on_asr": lambda text: events.append(("asr", text)),
+        "on_assistant_sentence": lambda text, *_a: events.append(("sent", text)),
+        "on_captions_clear": lambda: events.append(("clear",)),
+    }
+    return events, hooks
 
 
 def _ok_ports(
@@ -288,7 +313,7 @@ def test_build_audio_io_falls_back_without_arecord(monkeypatch) -> None:
 
 
 def test_two_default_turns_keep_qa_memory(tmp_path: Path, monkeypatch) -> None:
-    """qa/tts 缺省时只懒创建一次；第二轮记忆仍含第一轮 user。"""
+    """注入 QaService 时第二轮记忆仍含第一轮 user；TTS 只构建一次。"""
     from qa.client import LlmConfig
     from qa.turn import QaService
 
@@ -298,7 +323,6 @@ def test_two_default_turns_keep_qa_memory(tmp_path: Path, monkeypatch) -> None:
         model="qwen-plus",
         timeout_s=30.0,
     )
-    monkeypatch.setattr("qa.turn.load_llm_config", lambda *_a, **_k: cfg)
 
     def _fake_tokens(_config, _messages):
         yield "这是洋葱表皮。"
@@ -313,7 +337,14 @@ def test_two_default_turns_keep_qa_memory(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr("voice.session.build_tts", _fake_build_tts)
     questions = iter(["第一问细胞", "第二问细胞核"])
-    sess, _play = _session(tmp_path, _tone(0.5), asr=lambda _p: next(questions))
+    qa = QaService(
+        qa_dir=tmp_path / "qa",
+        config=cfg,
+        purge_on_start=False,
+    )
+    sess, _play = _session(
+        tmp_path, _tone(0.5), asr=lambda _p: next(questions), qa=qa
+    )
 
     sess.start_ptt()
     assert sess.stop_ptt() == "played"
@@ -342,3 +373,146 @@ def test_tts_playback_uses_tts_rate(tmp_path: Path) -> None:
     sess.start_ptt()
     sess.stop_ptt()
     assert TTS_RATE in rates
+
+
+def test_success_turn_captions_asr_sentences_then_clear(tmp_path: Path) -> None:
+    """成功路径：ASR、若干句回调，播完最后才 clear。"""
+    events, hooks = _caption_events()
+    asr_text = "问细胞壁"
+    qa_tokens = ["这是洋葱表皮细胞。", "细胞膜清晰可见了。"]
+    asr, qa, tts = _ok_ports(asr_text, qa_tokens)
+    sess, _play = _session(tmp_path, _tone(0.5), asr=asr, qa=qa, tts=tts, **hooks)
+    sess.start_ptt()
+    assert sess.stop_ptt() == "played"
+    assert ("asr", asr_text) in events
+    sent = [item for item in events if item[0] == "sent"]
+    assert sent == [("sent", "这是洋葱表皮细胞。"), ("sent", "细胞膜清晰可见了。")]
+    assert events[-1] == ("clear",)
+    asr_at = events.index(("asr", asr_text))
+    first_sent = events.index(("sent", "这是洋葱表皮细胞。"))
+    assert asr_at < first_sent < len(events) - 1
+
+
+def test_failed_beep_captions_clear_only_no_sent(tmp_path: Path) -> None:
+    """失败 beep：只有 clear，没有句回调。"""
+    events, hooks = _caption_events()
+    n = int(SAMPLE_RATE * 0.5)
+    silent = struct.pack("<" + "h" * n, *([0] * n))
+    sess, play = _session(tmp_path, silent, **hooks)
+    sess.start_ptt()
+    assert sess.stop_ptt() == "discarded"
+    assert play.played == [make_beep_pcm()]
+    assert events
+    assert all(item[0] == "clear" for item in events)
+    assert not any(item[0] in ("asr", "sent") for item in events)
+
+
+def test_start_ptt_success_clears_captions(tmp_path: Path) -> None:
+    """start_ptt 成功即清空字幕，尚未 ASR。"""
+    events, hooks = _caption_events()
+    asr, qa, tts = _ok_ports()
+    sess, _play = _session(tmp_path, _tone(0.5), asr=asr, qa=qa, tts=tts, **hooks)
+    assert sess.start_ptt() is True
+    assert events == [("clear",)]
+
+
+def test_empty_asr_captions_clear_without_asr_or_sent(tmp_path: Path) -> None:
+    """识别为空：beep 前 clear，不发 asr/sent。"""
+    events, hooks = _caption_events()
+    tts = _RecordingTts()
+    sess, play = _session(
+        tmp_path,
+        _tone(0.5),
+        asr=lambda _p: "  ",
+        qa=_ScriptQa(["不该走到问答。"]),
+        tts=tts,
+        **hooks,
+    )
+    sess.start_ptt()
+    assert sess.stop_ptt() == "failed"
+    assert play.played == [make_beep_pcm()]
+    assert tts.sentences == []
+    assert not any(item[0] == "asr" for item in events)
+    assert not any(item[0] == "sent" for item in events)
+    assert events[-1] == ("clear",)
+
+
+def test_caption_callback_errors_do_not_block_tts(tmp_path: Path) -> None:
+    """字幕回调抛错只记日志，不影响 TTS 与回合成功。"""
+
+    def _boom(*_args: object) -> None:
+        raise RuntimeError("caption boom")
+
+    asr, qa, tts = _ok_ports()
+    sess, play = _session(
+        tmp_path,
+        _tone(0.5),
+        asr=asr,
+        qa=qa,
+        tts=tts,
+        on_asr=_boom,
+        on_assistant_sentence=_boom,
+        on_captions_clear=_boom,
+    )
+    sess.start_ptt()
+    assert sess.stop_ptt() == "played"
+    assert tts.sentences
+    assert play.played
+    assert qa.turns
+
+
+def test_announce_new_session_when_idle_speaks_fixed(tmp_path: Path) -> None:
+    """空闲时历史钮切场并播同一固定句，不走 LLM。"""
+    qa = _ScriptQa(["不该出现"])
+    tts = _RecordingTts()
+    sess, play = _session(tmp_path, _tone(0.5), qa=qa, tts=tts)
+    assert sess.announce_new_session() == "played"
+    assert qa.new_sessions >= 1
+    assert qa.turns == []
+    assert tts.sentences == ["已处于新对话"]
+    assert play.played
+    assert make_beep_pcm() not in play.played
+    assert sess.is_busy() is False
+
+
+def test_announce_new_session_when_busy_is_ignored(tmp_path: Path) -> None:
+    """录音中点历史钮不切场、不播固定句。"""
+    qa = _ScriptQa(["不应切场"])
+    tts = _RecordingTts()
+    sess, _play = _session(
+        tmp_path, _tone(0.5), asr=lambda _p: "问", qa=qa, tts=tts
+    )
+    sess.start_ptt()
+    assert sess.announce_new_session() == "ignored"
+    assert qa.new_sessions == 0
+    assert tts.sentences == []
+
+
+def test_announce_busy_overlay_covers_fixed_sentence(tmp_path: Path) -> None:
+    """固定句播报期间仍是 turning，忙碌覆盖含这一句。"""
+    nested: dict[str, object] = {}
+    qa = _ScriptQa(["不该出现"])
+
+    class _Tts:
+        def synthesize(self, text: str) -> bytes:
+            nested["busy"] = sess.is_busy()
+            nested["input_enabled"] = sess.input_enabled()
+            nested["started"] = sess.start_ptt()
+            nested["announce"] = sess.announce_new_session()
+            return b"TTS:" + text.encode("utf-8")
+
+    play = MockPlayback()
+    sess = VoiceSession(
+        MockCapture(_tone(0.5)),
+        play,
+        tmp_path / "last.wav",
+        monotonic=lambda: 0.0,
+        qa=qa,
+        tts=_Tts(),
+    )
+    assert sess.announce_new_session() == "played"
+    assert nested["busy"] is True
+    assert nested["input_enabled"] is False
+    assert nested["started"] is False
+    assert nested["announce"] == "ignored"
+    assert sess.is_busy() is False
