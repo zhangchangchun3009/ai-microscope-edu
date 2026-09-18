@@ -57,7 +57,7 @@
   - `encrypt_secret(plain: str, serial: str) -> str`（`enc1:` + hex）
   - `decrypt_secret(token: str, serial: str) -> str`（非 `enc1:` 当明文；失败抛 `ValueError`）
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `ai-microscope-edu/software/tests/test_secret_box.py`：
 
@@ -107,13 +107,13 @@ def test_plaintext_passthrough() -> None:
     assert decrypt_secret("sk-plain", "serial-a") == "sk-plain"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd ai-microscope-edu/software && PYTHONPATH=. /usr/bin/python3 -m pytest tests/test_secret_box.py -q`
 
 Expected: FAIL（`system` 未定义或缺 `cryptography`）
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `system/__init__.py` 可为模块说明 docstring。
 
@@ -148,13 +148,13 @@ def decrypt_secret(token: str, serial: str) -> str:
 
 每个对外函数写用途/参数/返回值/副作用。`requirements.txt` 增加两行依赖。本机 `python3 -m pip install 'ruamel.yaml>=0.18' 'cryptography>=42'`（若 pytest 缺包）。
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd ai-microscope-edu/software && PYTHONPATH=. /usr/bin/python3 -m pytest tests/test_secret_box.py -q`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -175,7 +175,7 @@ Expected: PASS
   - `paginate(text: str, max_chars: int) -> list[str]`
   - `CaptionPager`：`show(text, max_chars, now)` / `tick(now)` / `clear()` / `visible_text`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_display.py`：
 
@@ -204,11 +204,11 @@ def test_map_touch_identity_0() -> None:
 
 `tests/test_captions.py`：短文一页；`max_chars=4` 时 `"abcdefgh"` 两页且每页 ≤4；`CaptionPager.show` 后 `tick(+2)` 翻页；`clear` 后 `visible_text==""`。
 
-- [ ] **Step 2: Run tests — expect FAIL**
+- [x] **Step 2: Run tests — expect FAIL**
 
 `pytest tests/test_display.py tests/test_captions.py -q`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `logical_size`：`deg = normalize_rotation(deg)`；90/270 返回 `(ph, pw)` 否则 `(pw, ph)`。
 
@@ -225,8 +225,8 @@ def test_map_touch_identity_0() -> None:
 
 `CaptionPager`：`show` 重置页索引与时间戳；`tick` 若 `now - shown_at >= PAGE_HOLD_S` 且还有下一页则 `index+=1`；`clear` 清空。
 
-- [ ] **Step 4: pytest PASS**
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 4: pytest PASS**
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -245,7 +245,7 @@ def test_map_touch_identity_0() -> None:
   - `apply_fixed_path(*, runner=...) -> None`
   - `apply_volume(pct: int, *, runner=...) -> None`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```python
 def test_volume_map() -> None:
@@ -271,8 +271,8 @@ def test_apply_volume_calls_output_1_and_2() -> None:
 
 `runner` 缺 `amixer` 时 `OSError` 必须吞掉（再写一个 test：`runner` 抛 `OSError`，`apply_fixed_path` 不抛）。
 
-- [ ] **Step 2–4:** 实现 argv：`amixer -c 0 sset Speaker on` 等，与 README 现状一致（spk switch、Line 2、Channel 8、PCM 100%）。`apply_*` 对每条 `runner(cmd, check=False, capture_output=True, timeout=3)`。默认 `runner=subprocess.run`。
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 2–4:** 实现 argv：`amixer -c 0 sset Speaker on` 等，与 README 现状一致（spk switch、Line 2、Channel 8、PCM 100%）。`apply_*` 对每条 `runner(cmd, check=False, capture_output=True, timeout=3)`。默认 `runner=subprocess.run`。
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -292,7 +292,7 @@ def test_apply_volume_calls_output_1_and_2() -> None:
   - `patch_edu(path: Path, **fields) -> EduSettings`（读改写）
   - `maybe_migrate_llm_json(yaml_path: Path, json_path: Path, serial: str) -> None`
 
-- [ ] **Step 1: Tests**
+- [x] **Step 1: Tests**
 
 - 无文件：`rotation_deg==90`、`volume_pct==73`、`captions_enabled is False`、`llm=={}`
 - 坏 yaml：同样回退
@@ -300,11 +300,11 @@ def test_apply_volume_calls_output_1_and_2() -> None:
 - 文件里已有 `# keep-me` 注释，只 `patch` 音量后注释仍在（若 ruamel 丢注释则至少未改的 `llm.model` 还在）
 - `llm.json` 有三件套、yaml 无 `llm.base_url`：`maybe_migrate_llm_json` 后 yaml 里 `api_key` 以 `enc1:` 开头，json 文件仍在
 
-- [ ] **Step 3: Implement with ruamel.yaml `YAML(typ="rt")`**。`llm` 缺省 `{}`。样例 `deploy/edu.yaml.example` 按 spec §3 写注释，密钥写 `# api_key: enc1:...` 不要写真值。
+- [x] **Step 3: Implement with ruamel.yaml `YAML(typ="rt")`**。`llm` 缺省 `{}`。样例 `deploy/edu.yaml.example` 按 spec §3 写注释，密钥写 `# api_key: enc1:...` 不要写真值。
 
 `patch_edu` 只更新传入的顶层字段（`rotation_deg` / `captions_enabled` / `volume_pct` / `llm`）。
 
-- [ ] **Step 4–5:** pytest PASS；Commit 跳过
+- [x] **Step 4–5:** pytest PASS；Commit 跳过
 
 ---
 
@@ -326,7 +326,7 @@ def test_apply_volume_calls_output_1_and_2() -> None:
 
 环境变量规则与现在相同；`EDU_LLM_API_KEY` 出现则不走解密。yaml 里 `enc1:` 用 `serial or read_cpu_serial()` 解密，失败则该 key 当空（整份配置若缺三件套 → `None`）。
 
-- [ ] **Step 1:** 改 `test_load_llm_config_*`：把 `llm.json` 写成 `edu.yaml`：
+- [x] **Step 1:** 改 `test_load_llm_config_*`：把 `llm.json` 写成 `edu.yaml`：
 
 ```yaml
 llm:
@@ -342,10 +342,10 @@ llm:
 
 解密失败：yaml `api_key: enc1:00`，`serial="x"` → `load_llm_config` 返回 `None`（不要把乱码当 Bearer）。
 
-- [ ] **Step 3:** `QaService` 默认 `edu_yaml = software/var/edu.yaml`，`USER.md` 仍 `var/qa/USER.md`。构造未注入 config 时 `load_llm_config(self._edu_yaml, env)`。启动时若 yaml 无 llm 则 `maybe_migrate_llm_json(edu_yaml, qa_dir/"llm.json", serial)` 再 load。
+- [x] **Step 3:** `QaService` 默认 `edu_yaml = software/var/edu.yaml`，`USER.md` 仍 `var/qa/USER.md`。构造未注入 config 时 `load_llm_config(self._edu_yaml, env)`。启动时若 yaml 无 llm 则 `maybe_migrate_llm_json(edu_yaml, qa_dir/"llm.json", serial)` 再 load。
 
-- [ ] **Step 4:** `pytest tests/test_qa_client.py tests/test_qa_reload.py tests/test_qa_prompt.py -q` PASS
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 4:** `pytest tests/test_qa_client.py tests/test_qa_reload.py tests/test_qa_prompt.py -q` PASS
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -371,8 +371,8 @@ llm:
 
 成功路径：先句回调，播完再 clear。测试用现有 mock QA/TTS：收 `events` 列表，断言含 `("asr", "...")`、若干 `("sent", ...)`、最后 `("clear",)`。失败 beep 路径只有 clear，无 sent。
 
-- [ ] **Step 4:** `pytest tests/test_voice_session.py tests/test_voice_turn.py -q` PASS
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 4:** `pytest tests/test_voice_session.py tests/test_voice_turn.py -q` PASS
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -390,16 +390,16 @@ llm:
 - `SettingsPage(on_close, settings: EduSettings, on_change, parent)` 信号或回调：`rotation_deg`、`captions_enabled`、`volume_pct` 变化；子页入口先做按钮，Task 9 再填编辑器。
 - 触控：关闭钮、开关、旋转钮、滑条高度 **56**。分组标题「显示」「语音与问答」。
 
-- [ ] **Step 1:** 在 `test_shell_state.py` 已有 `open_tool("settings")` → `split_open` 且不要藏 strip（`strip_expanded` 保持 True）。无需新状态。可加 `assert SPLIT_HANDLE_PX >= 24`。
+- [x] **Step 1:** 在 `test_shell_state.py` 已有 `open_tool("settings")` → `split_open` 且不要藏 strip（`strip_expanded` 保持 True）。无需新状态。可加 `assert SPLIT_HANDLE_PX >= 24`。
 
-- [ ] **Step 3:** `QSplitter.setHandleWidth(32)`；QSS `width: 32px`。`SettingsPage` objectName `settingsPage`，页头「设置」+「关闭」。`QStackedWidget`：首页分组 + 两个占位子页壳（标题+返回），避免后面再拆导航。
+- [x] **Step 3:** `QSplitter.setHandleWidth(32)`；QSS `width: 32px`。`SettingsPage` objectName `settingsPage`，页头「设置」+「关闭」。`QStackedWidget`：首页分组 + 两个占位子页壳（标题+返回），避免后面再拆导航。
 
 音量滑条 `sliderReleased`（及 `editingFinished`）才调用 `on_change(volume_pct=...)`。旋转四钮互斥。字幕 `QCheckBox` 或开关按钮。
 
 `MainWindow._apply` 仍显示工具条。变化写入 `patch_edu` + 立刻副作用留给 Task 8/10（本任务可只改内存回调，`MainWindow` 先 `print`/调 `on_settings_patch`）。
 
-- [ ] **Step 4:** `pytest tests/test_shell_state.py tests/test_icons.py -q` PASS。设置页不强制 Qt 单测。
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 4:** `pytest tests/test_shell_state.py tests/test_icons.py -q` PASS。设置页不强制 Qt 单测。
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -432,8 +432,8 @@ host.showFullScreen()
 
 内容逻辑尺寸 = `logical_size(host.width(), host.height(), deg)`。浮标仍跟预览 `resized`。
 
-- [ ] **Step 4:** `pytest tests/test_display.py -q` PASS。211 手测点 0/90。
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 4:** `pytest tests/test_display.py -q` PASS。211 手测点 0/90。
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -454,8 +454,8 @@ host.showFullScreen()
 - `settings_prompt.py`：`QTextEdit` + 保存/清空（清空 `QMessageBox` 确认）；读写 `var/qa/USER.md`。
 - `settings_llm.py`：字段对齐 spec §8；key/secret 空占位「已加密保存，输入新密钥将覆盖」；保存时空 key 表示保持；写出 `enc1:`；`QaService.reload_llm()`。环境变量若 `in os.environ` 则只读 + 顶栏提示。三件套空拒绝保存。日志与异常字符串禁止包含明文 key。
 
-- [ ] **Step 4:** `pytest tests/test_captions.py tests/test_qa_prompt.py tests/test_qa_reload.py tests/test_voice_session.py -q`
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 4:** `pytest tests/test_captions.py tests/test_qa_prompt.py tests/test_qa_reload.py tests/test_voice_session.py -q`
+- [x] **Step 5: Commit** — 跳过
 
 ---
 
@@ -486,8 +486,8 @@ README：
 
 `edu-mixer.sh`：与 `fixed_path_commands()` 同一组 `amixer`（Speaker、spk switch、Line 2、Channel 8、PCM）。
 
-- [ ] **Step 4:** 全量 `pytest tests/ --ignore=tests/test_ai_fab.py -q`（现网约 116+ 本刀新用例）
-- [ ] **Step 5: Commit** — 跳过
+- [x] **Step 4:** 全量 `pytest tests/ --ignore=tests/test_ai_fab.py -q`（现网约 116+ 本刀新用例）
+- [x] **Step 5: Commit** — 跳过
 
 ---
 

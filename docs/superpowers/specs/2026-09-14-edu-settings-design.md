@@ -51,6 +51,9 @@ display:
   captions_enabled: false
 audio:
   volume_pct: 73     # 映射 ALSA Output 0–33，73→24
+qa:
+  retain_days: 7      # 启动时删 updated_at 更早且非当前场；不进设置页
+  context_turns: 8    # 送给 LLM 的当前场最近轮数
 llm:
   base_url: https://www.aiinstrum.com/api-micro-llm/v1
   model: qwen-plus
@@ -96,7 +99,7 @@ llm:
 
 | 组 | 行 | 行为 |
 |----|----|------|
-| 显示 | 字幕 | 开关；立刻显隐底栏并写 yaml |
+| 显示 | 字幕 | 与方向钮同高的 **开/关** 按钮（不用勾选框）；立刻显隐底栏并写 yaml |
 | 显示 | 屏幕方向 | 四按钮 `0°` `90°` `180°` `270°`；点即转并写 yaml |
 | 语音与问答 | 音量 | 滑条 0–100；**松手**写 `amixer` 与 yaml |
 | 语音与问答 | 自定义问答助手 | 子页编辑 `USER.md` |
@@ -104,7 +107,7 @@ llm:
 
 子页栈深最多两层。融合 / 拼接 / 历史继续占位。
 
-**虚拟键盘：** `QT_IM_MODULE=qtvirtualkeyboard`，默认 **zh_CN 拼音**（全键 + 候选栏），可切英文。`LANG`/`QLocale` 用中文。211 必须装 Qt VirtualKeyboard **以及拼音插件**；验收：在 USER.md 里能拼出「洋葱」。缺插件视为部署失败，不把英文-only 当合格。Mac 无该插件时可用外接键盘，包括中文输入法。
+**虚拟键盘：** `QT_IM_MODULE=qtvirtualkeyboard`，默认 **zh_CN 拼音**（全键 + 候选栏），语言切换只保留 **简中 / 繁中 / 英文**（`VirtualKeyboardSettings.activeLocales` + `QT_VIRTUALKEYBOARD_AVAILABLE_LOCALES`）。`LANG`/`QLocale` 用简体中文。**禁止**走独立顶层 Desktop InputPanel（linuxfb + `RotateHost` 调不出）。改为 `QT_VIRTUALKEYBOARD_DESKTOP_DISABLE=1`，把 `InputPanel` 嵌进 `MainWindow` 底边（随内容一起旋转）。`InputPanel` 作为 `QQuickWidget` 根对象，视口跟着内容高度（含候选栏），避免最下一排被压扁。点键盘不得抢走编辑框焦点。**右栏始终可纵向滚动**（常显粗滚动条，触屏可拖）；键盘弹出时在内容下方垫一块与键盘等高的空白，把焦点/光标滚到键盘上方，不压缩设置页布局。linuxfb 用 `QT_QUICK_BACKEND=software`。板上须装与 Essentials **同版本** 的 `PySide6-Addons`（提供 `libQt6VirtualKeyboard*.so`）；Debian Qt 6.4 的 VirtualKeyboard 包不要混用。`edu-app.service` 把 `LD_LIBRARY_PATH` 指到 venv 的 `PySide6/Qt/lib`。验收：在 USER.md 里能拼出「洋葱」，并能切到英文。Mac 无该插件时可用外接键盘。
 
 ## 5. 立刻旋转
 
@@ -130,20 +133,20 @@ llm:
 | 阶段 | 行为 |
 |------|------|
 | ASR 成功 | 立刻把识别全文分页显示。多幕则每幕停留 **2 s** 再下一幕 |
-| 第一句 TTS 取走合成 | **立刻顶掉** 当前画面（含未读完的 ASR 幕），改为该句的分页 |
-| 后续 TTS 句 | 后句整页顶掉前句；该句超长则同样 2 s 切幕 |
-| 无 token 级显示 | 切幕不必与喇叭逐字对齐；可接受短暂不同步 |
+| TTS | **句级跟读**：某句 **开始 aplay** 才上字幕（不是入合成队列时）。水位仍可提前合成多句，但字幕不得把未播的句闪完。 |
+| 后续 TTS 句 | 下一句开口才顶掉前句 |
+| 一句超长 | 按该句 PCM 时长均分各幕；最后一幕留到这句播完。不做逐字卡拉 OK |
 | 播报结束（队列播完、回空闲） | **立刻隐藏** 整条，不把最后一句留到下一轮 |
 | 失败 beep / 新一轮 `start_ptt` | 同样隐藏并取消切幕定时器 |
 
-TTS 到达优先于 ASR 剩余阅读时间。关字幕则永不出现该框；开关不改变语音是否运行。
+TTS 开口优先于 ASR 剩余阅读时间。关字幕则永不出现该框；开关不改变语音是否运行。
 
 `VoiceSession` 回调可在工作线程触发，GUI 用排队信号更新：
 
 | 回调 | 何时 |
 |------|------|
 | `on_asr(text)` | 判定通过且识别非空 |
-| `on_assistant_sentence(text)` | 一句被播放器取走去合成（与现分句队列同一批句） |
+| `on_assistant_sentence(text, duration_s)` | 该句 **开始播放**（`play_pcm` 之前），不是 `submit` 入队时 |
 | `on_captions_clear()` | 回合成功播完、失败 beep、或新一轮开始录音 |
 
 ## 7. 混音器与音量

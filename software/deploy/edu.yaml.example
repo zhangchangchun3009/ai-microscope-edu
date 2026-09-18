@@ -1,0 +1,19 @@
+# 教学一体机简单配置。融合 / 拼接 / 计数等算法参数仍用各自文件，不写这里。
+v: 1
+display:
+  rotation_deg: 90   # 物理 fb 1080×1920；90 = 逻辑横屏 1920×1080
+  captions_enabled: false
+audio:
+  volume_pct: 73     # 映射 ALSA Output 0–33，73→24
+qa:
+  retain_days: 7      # 启动时删 updated_at 更早且非当前场；不进设置页
+  context_turns: 8    # 送给 LLM 的当前场最近轮数
+llm:
+  base_url: https://www.aiinstrum.com/api-micro-llm/v1
+  model: qwen-plus
+  timeout_secs: 30
+  # 下列密文由本机 CPU 序列号派生，换设备必须重填
+  # api_key: enc1:...
+  # device_secret: enc1:...
+  device_secret_hosts:
+    - www.aiinstrum.com
