@@ -151,8 +151,8 @@
   },
   "arm_clamp": {
     "arm_w_caliper": 57.5,
-    "inner_w": 60.5,
-    "print_clear": 1.5,
+    "inner_w": 58.5,
+    "print_clear": 0.5,
     "h": 45.0,
     "wall": 6.0,
     "wrap_y": 22.0,
@@ -167,7 +167,7 @@
     "set_screw_faces": "sides",
     "set_screw_span": 24.0,
     "z0": 188.0,
-    "note": "卡尺臂宽 57.5；内腔 60.5=57.5+两侧各 1.5，滑入后顶丝收紧。"
+    "note": "卡尺臂宽 57.5；内腔 58.5=57.5+两侧各 0.5，滑入后顶丝收紧。首打 1.5 每侧过宽。"
   },
   "screen": {
     "face_wh": [258.0, 168.0],
@@ -183,18 +183,26 @@
     "baffle_bottom": 10.0,
     "baffle_bottom_deg": 60.0,
     "outer_extra": 4.0,
+    "seam_overlap": 2.0,
     "cable": "top_center_mipi",
-    "note": "左右平框中线对缝、互不重叠；各拧到单独打印的中间竖条。外沿挡玻璃，镂空嵌满 4–5 mm 钢板。"
+    "note": "左右平框中线重叠 2 mm（抗收缩）。底槽先直角井放下玻璃+钢板总厚，再接 60° 斜挡。外沿挡玻璃，镂空嵌满 4–5 mm 钢板。"
+  },
+  "tray_patch": {
+    "printed_side": "left",
+    "printed_cover": 128.0,
+    "remain_cover": 130.0,
+    "note": "配已打左半（只包 128 mm）。右补救件包剩余 130 mm。钢板镂空仍可能卡；只托屏。正式左右框见 screen，不要用补救件当量产。"
   },
   "beam_clamp": {
     "beam_w_caliper": 57.5,
-    "inner_w": 60.5,
-    "print_clear": 1.5,
+    "inner_w": 58.5,
+    "print_clear": 0.5,
     "wall": 6.0,
     "len_along": 40.0,
     "wrap_down": 15.0,
     "wrap_bottom": false,
     "m4_tap_d": 3.6,
+    "m4_top": false,
     "set_screws": 2,
     "m3_through": 3.2,
     "m3_hex_len": 30,
@@ -206,14 +214,17 @@
     "standoff": 45.0,
     "slide_slot": 30.0,
     "tilt_from_vert": 45.0,
-    "tilt_range": 25.0,
+    "arc_a0": 0.0,
+    "arc_a1": -90.0,
+    "hinge_cut_h": 9.4,
     "tongue_r": 16.0,
     "tongue_t": 5.4,
+    "neck_x": 5.4,
     "ear_t": 6.0,
     "arc_r": 11.0,
     "open_toward": "arm",
     "beam_angle_est": 20.1,
-    "note": "座板夹耳 + 倒 U 圆舌。下包 ≤17（梁面到弓顶）。倾角由横梁 98/92 算出约 20°，铰链再吃误差。"
+    "note": "座板夹耳锁孔已打在 −45°。圆舌到倒 U 的肋与圆舌同厚 5.4 mm，才能塞进夹耳。锁槽 0°…−90°（总装 −45° 时锁孔对准 0°）。倒 U 左右各 1×M4。内腔 58.5。下包 ≤17。"
   },
   "cross_beam": {
     "width": 57.5,

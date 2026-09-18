@@ -85,7 +85,7 @@ openscad -o ../stl/arm_clamp.stl       -D 'part="clamp"' 51_arm_clamp.scad
 
 设计：[`../../docs/superpowers/specs/2026-09-09-screen-beam-clamp-design.md`](../../docs/superpowers/specs/2026-09-09-screen-beam-clamp-design.md)。
 
-触屏面 **258×168**，大于 X1C 床，托盘拆两半。左右平框中线对缝，都拧到单独打印的中间竖条上：外沿挡玻璃、中间镂空嵌 4–5 mm 钢板。抱箍再拧竖条。框板与竖条背面朝床平打，挡板朝上。
+触屏面 **258×168**，大于 X1C 床，托盘拆两半。正式左右平框中线重叠 2 mm，都拧到单独打印的中间竖条上：外沿挡玻璃、底槽先直角井再 60°、中间镂空嵌 4–5 mm 钢板。已打左半（只包 128 mm）配 `screen_tray_r_patch.stl`，不当量产。
 
 耗材同样 **PETG-CF** / **0.6 mm**。托盘两半槽口朝上平打；竖条平打；抱箍贴合面朝上或侧立，顶丝孔水平打。
 
@@ -96,11 +96,12 @@ openscad -o ../stl/beam_saddle.stl   -D 'part="saddle"' 52_beam_clamp.scad
 openscad -o ../stl/beam_bar.stl      -D 'part="bar"'    52_beam_clamp.scad
 openscad -o ../stl/screen_tray_l.stl -D 'part="tray_l"' 52_beam_clamp.scad
 openscad -o ../stl/screen_tray_r.stl -D 'part="tray_r"' 52_beam_clamp.scad
+openscad -o ../stl/screen_tray_r_patch.stl -D 'part="tray_r_patch"' 52_beam_clamp.scad
 ```
 
 看形状：打开 `52_beam_clamp.scad`（默认 `preview` 是拼好的总装，鞍按 −45°；`part="explode"` 拆开摆）。总装打开 `10_layout.scad`（默认已含框托与横梁抱箍）。
 
-屏支架一律 **M3×30 外六角 + 螺母**（框–条 4 + 座板 2 + 铰链 2）；螺母沉窝，余牙出背面。横梁左右 2×M4 顶丝 + 尼龙垫。
+屏支架一律 **M3×30 外六角 + 螺母**（框–条 4 + 座板 2 + 铰链 2）；螺母沉窝，余牙出背面。横梁倒 U 左右 2×M4 顶丝 + 尼龙垫。
 
 ## 装配
 

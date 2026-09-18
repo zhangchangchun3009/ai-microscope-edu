@@ -34,6 +34,16 @@ def tray_inner_wh(face_w: float, face_h: float, edge_clear: float) -> tuple[floa
     return (face_w + 2.0 * edge_clear, face_h + 2.0 * edge_clear)
 
 
+def stack_well_h(glass_t: float, steel_pocket_d: float) -> float:
+    """底槽直角井高度：先放下玻璃+钢板总厚，再接 60° 斜挡。"""
+    return glass_t + steel_pocket_d
+
+
+def patch_r_inner_x(face_w: float, printed_left_cover: float) -> float:
+    """已打左半包住 printed_left_cover 时，右补救件内沿 X（原点在屏宽中点）。"""
+    return -(face_w / 2.0 - printed_left_cover)
+
+
 def tray_half_span(inner_w: float) -> float:
     """单半沿屏宽方向的跨度（不含侧墙外翻）。"""
     return inner_w / 2.0

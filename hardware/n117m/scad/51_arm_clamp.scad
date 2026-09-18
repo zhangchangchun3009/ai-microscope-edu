@@ -1,6 +1,6 @@
 // N-117M 臂后 C 形顶丝抱箍 + 矩形板（一件）。
 // 后+左右近乎直角，后棱小圆角 r=3。顶丝在左右贴合壁。
-// 卡尺约 57.5；内腔 = 57.5 + 两侧各 1.5。禁止 use openscad_V1。
+// 卡尺约 57.5；内腔 = 57.5 + 两侧各 0.5。禁止 use openscad_V1。
 // 导出：openscad -D 'part="clamp"' -o ../stl/arm_clamp.stl
 
 part = "preview"; // preview | clamp
@@ -8,7 +8,7 @@ part = "preview"; // preview | clamp
 $fn = 40;
 
 inner_w = 57.5;
-print_clear = 1.5;
+print_clear = 0.5;
 clamp_h = 45.0;
 wall = 6.0;
 wrap_y = 22.0;

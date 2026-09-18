@@ -154,7 +154,7 @@ def speaker_pocket_x(inner_half: float, side: float, boss_t: float = 5.0, depth:
 
 
 def clamp_cavity_w(arm_w: float, clear_each: float) -> float:
-    """抱箍内腔宽 = 卡尺臂宽 + 两侧间隙。间隙要能滑入，靠顶丝收紧。"""
+    """抱箍内腔宽 = 卡尺臂宽 + 两侧间隙。首打每侧 1.5 过宽，改为 0.5，靠顶丝收紧。"""
     return arm_w + 2.0 * clear_each
 
 

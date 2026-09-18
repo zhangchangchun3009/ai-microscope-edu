@@ -20,8 +20,10 @@ from screen_geom import (  # noqa: E402
     fits_x1c_bed,
     screen_contact_y,
     screen_origin_yz,
+    stack_well_h,
     steel_wh,
     steel_window_w,
+    patch_r_inner_x,
     tray_half_span,
     tray_inner_wh,
     tube_axis_y,
@@ -64,14 +66,15 @@ class TestScreenFace(unittest.TestCase):
         self.assertGreater(s["baffle_side"], s["glass_t"])
         self.assertAlmostEqual(baffle_inward(10.0, 60.0), 10.0 / 3**0.5, places=2)
         self.assertAlmostEqual(s["glass_t"] + s["baffle_side"], 5.8, places=1)
-        # 两块侧挡内沿间距 = 玻璃宽 + 两侧间隙；底楔伸进开孔小于钢板边距
-        self.assertAlmostEqual(
-            s["face_wh"][0] + 2.0 * s["edge_clear"], 258.8, places=1
-        )
+        # 底楔先有直角井再 60°，斜边仍伸不进钢板区
         self.assertLess(
             s["front_lip"] + baffle_inward(s["baffle_bottom"], s["baffle_bottom_deg"]),
             s["steel_inset_tb"],
         )
+        self.assertAlmostEqual(
+            stack_well_h(s["glass_t"], s["steel_pocket_d"]), 7.3, places=1
+        )
+        self.assertEqual(s["seam_overlap"], 2.0)
         # 两级台阶：外框挡玻璃，内框镂空嵌满 4–5 mm 钢板
         self.assertEqual(s["steel_pocket_d"], 5.0)
         self.assertGreaterEqual(s["steel_pocket_d"], s["steel_proud"])
@@ -89,16 +92,47 @@ class TestTraySplitFitsBed(unittest.TestCase):
         self.assertFalse(fits_x1c_bed(258.0, 168.0))
 
 
+class TestTrayPatchForPrintedLeft(unittest.TestCase):
+    """已打左半只包 128 mm；右补救件包剩余 130 mm。正式左右仍中线重叠。"""
+
+    def test_patch_covers_remaining_130(self):
+        s = DIMS["screen"]
+        p = DIMS["tray_patch"]
+        self.assertEqual(p["printed_side"], "left")
+        self.assertEqual(p["printed_cover"], 128.0)
+        self.assertEqual(p["remain_cover"], 130.0)
+        self.assertAlmostEqual(
+            p["printed_cover"] + p["remain_cover"], s["face_wh"][0], places=1
+        )
+        x0 = patch_r_inner_x(s["face_wh"][0], p["printed_cover"])
+        self.assertAlmostEqual(x0, -1.0, places=1)
+        text = (SCAD / "52_beam_clamp.scad").read_text(encoding="utf-8")
+        self.assertIn('part="tray_r_patch"', text)
+        self.assertIn("module screen_tray_r_patch(", text)
+        self.assertIn("stack_h = glass_t + steel_pocket_d", text)
+        self.assertIn("seam_overlap = 2.0", text)
+        self.assertIn("print_left_cover = 128.0", text)
+        self.assertIn("well = false", text)
+        self.assertIn("module bottom_baffle_printed_2d(", text)
+
+
 class TestBeamClamp(unittest.TestCase):
     def test_same_width_as_column_caliper(self):
         b = DIMS["beam_clamp"]
         self.assertEqual(b["beam_w_caliper"], 57.5)
-        self.assertEqual(b["print_clear"], 1.5)
+        self.assertEqual(b["print_clear"], 0.5)
         self.assertAlmostEqual(
-            clamp_cavity_w(b["beam_w_caliper"], b["print_clear"]), 60.5, places=1
+            clamp_cavity_w(b["beam_w_caliper"], b["print_clear"]), 58.5, places=1
         )
-        self.assertEqual(b["inner_w"], 60.5)
+        self.assertEqual(b["inner_w"], 58.5)
+        text = (SCAD / "52_beam_clamp.scad").read_text(encoding="utf-8")
+        self.assertIn("print_clear = 0.5", text)
         self.assertEqual(b["m4_tap_d"], 3.6)
+        self.assertFalse(b.get("m4_top", False))
+        self.assertEqual(b["neck_x"], 5.4)
+        self.assertEqual(b["neck_x"], b["tongue_t"])
+        self.assertEqual(b["hinge_cut_h"], 9.4)
+        self.assertEqual(b["hinge_cut_h"], b["tongue_t"] + 4)
         self.assertEqual(b["wrap_bottom"], False)
         self.assertEqual(b["set_screws"], 2)
         self.assertEqual(b["standoff"], 45.0)
@@ -111,7 +145,9 @@ class TestBeamClamp(unittest.TestCase):
         self.assertEqual(b["m3_nut_h"], 2.4)
         self.assertEqual(b["m3_nut_pocket_d"], 3.0)
         self.assertEqual(b["bar_w"], 22.0)
-        self.assertEqual(b["tilt_range"], 25.0)
+        self.assertEqual(b["arc_a0"], 0.0)
+        self.assertEqual(b["arc_a1"], -90.0)
+        self.assertNotIn("tilt_range", b)
         self.assertEqual(b["tongue_r"], 16.0)
         self.assertEqual(b["wrap_down"], 15.0)
         self.assertLessEqual(b["wrap_down"], DIMS["cross_beam"]["wrap_max"])
@@ -126,16 +162,31 @@ class TestScad(unittest.TestCase):
         self.assertIn("module beam_saddle()", text)
         self.assertIn("module screen_tray(", text)
         self.assertIn("m4_tap_d", text)
+        self.assertIn("hinge_cut_h = tongue_t + 4", text)
+        self.assertIn("h = hinge_cut_h", text)
+        self.assertIn("cube([tongue_t, 16, 6]", text)
+        self.assertNotIn("cube([24, 16, 6]", text)
+        self.assertNotIn("m4_top_x", text)
+        self.assertNotIn("module beam_saddle_top_m4(", text)
+        self.assertIn("module beam_saddle_cavity(", text)
+        self.assertIn("beam_saddle_cavity()", text)
         self.assertIn("m3_through", text)
         self.assertIn('part="clamp"', text)
         self.assertIn('part="saddle"', text)
         self.assertIn("module saddle_solid(", text)
         self.assertIn("module beam_clamp_plate(", text)
-        self.assertIn("tilt_range = 25.0", text)
+        self.assertIn("arc_a0 = 0", text)
+        self.assertIn("arc_a1 = -90", text)
+        self.assertIn("arc_n = 8", text)
+        self.assertNotIn("tilt_range = 25.0", text)
         self.assertIn("-tilt_from_vert", text)
         self.assertIn("baffle_side = 3.5", text)
         self.assertIn("baffle_bottom = 10.0", text)
         self.assertIn("baffle_bottom_deg = 60.0", text)
+        self.assertIn("stack_h = glass_t + steel_pocket_d", text)
+        self.assertIn("seam_overlap = 2.0", text)
+        self.assertIn('part="tray_r_patch"', text)
+        self.assertIn("module screen_tray_r_patch(", text)
         self.assertIn("wrap_down = 15.0", text)
         self.assertIn("standoff = 45.0", text)
         self.assertIn("slide_slot = 30.0", text)

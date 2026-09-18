@@ -255,9 +255,12 @@ class TestClamp(unittest.TestCase):
     def test_caliper_inner_width_not_arm_model_62(self):
         c = DIMS["arm_clamp"]
         self.assertEqual(c["arm_w_caliper"], 57.5)
-        self.assertGreaterEqual(c["print_clear"], 1.5)
+        self.assertEqual(c["print_clear"], 0.5)
         cavity = clamp_cavity_w(c["arm_w_caliper"], c["print_clear"])
-        self.assertAlmostEqual(cavity, 60.5, places=1)
+        self.assertAlmostEqual(cavity, 58.5, places=1)
+        self.assertEqual(c["inner_w"], 58.5)
+        text = (SCAD / "51_arm_clamp.scad").read_text(encoding="utf-8")
+        self.assertIn("print_clear = 0.5", text)
         self.assertEqual(c["h"], 45.0)
         self.assertEqual(c["plate_pitch"], 40.0)
         self.assertEqual(c["m4_tap_d"], 3.6)

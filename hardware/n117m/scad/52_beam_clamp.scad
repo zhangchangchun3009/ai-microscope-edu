@@ -6,9 +6,10 @@
 //       openscad -D 'part="bar"'    -o ../stl/beam_bar.stl
 //       openscad -D 'part="tray_l"' -o ../stl/screen_tray_l.stl
 //       openscad -D 'part="tray_r"' -o ../stl/screen_tray_r.stl
+//       openscad -D 'part="tray_r_patch"' -o ../stl/screen_tray_r_patch.stl
 //       part="explode" 拆开；默认 preview 是拼好的总装（鞍按 −45°）。
 
-part = "preview"; // preview | explode | clamp | saddle | bar | tray_l | tray_r
+part = "preview"; // preview | explode | clamp | saddle | bar | tray_l | tray_r | tray_r_patch
 
 $fn = 40;
 
@@ -27,6 +28,8 @@ baffle_bottom_deg = 60.0;
 rail_out = 14.0;
 wall_t = 3.0;
 outer_extra = 4.0;
+seam_overlap = 2.0;
+print_left_cover = 128.0;
 cable_gap = 24.0;
 m3_through = 3.2;
 m3_hex_len = 30;
@@ -41,13 +44,14 @@ inner_h = face_h + 2 * edge_clear;
 win_w = 228.0 + 2 * steel_clear;
 win_h = 142.0 + 2 * steel_clear;
 bottom_inset = baffle_bottom / tan(baffle_bottom_deg);
+stack_h = glass_t + steel_pocket_d;
 ox = face_w / 2 + edge_clear;
 ix = win_w / 2;
 explode_x = 28.0;
 explode_z = 55.0;
 
 beam_w_caliper = 57.5;
-print_clear = 1.5;
+print_clear = 0.5;
 cavity_w = beam_w_caliper + 2 * print_clear;
 wall = 6.0;
 len_along = 40.0;
@@ -55,12 +59,15 @@ wrap_down = 15.0;
 m4_tap_d = 3.6;
 standoff = 45.0;
 tilt_from_vert = 45.0;
-tilt_range = 25.0;
 tongue_r = 16.0;
 tongue_t = 5.4;
 ear_t = 6.0;
 hinge_gap = 0.4;
 arc_r = 11.0;
+arc_a0 = 0;
+arc_a1 = -90;
+arc_n = 8;
+hinge_cut_h = tongue_t + 4;
 hinge_drop = 28.0;
 hinge_back = 12.0;
 open_toward = "arm";
@@ -82,21 +89,22 @@ pivot_y = plate_y - hinge_drop;
 pivot_z = back_z - plate_t - hinge_back;
 ear_x = tongue_t / 2 + hinge_gap + ear_t / 2;
 saddle_tilt = -tilt_from_vert;
-arc_a0 = -(tilt_from_vert + tilt_range);
-arc_a1 = -(tilt_from_vert - tilt_range);
 
 /**
- * 半框外沿。
+ * 半框外沿。正式件中线重叠 seam_overlap，避免收缩后底挡对不上。
  */
-function half_x0(side) = (side < 0) ? -(ox + outer_extra) : 0;
-function half_x1(side) = (side < 0) ? 0 : (ox + outer_extra);
+function half_x0(side) = (side < 0) ? -(ox + outer_extra) : -seam_overlap;
+function half_x1(side) = (side < 0) ? seam_overlap : (ox + outer_extra);
+
+/**
+ * 已打左半包 128 mm 时，右补救件内沿（屏宽中点为 0）。
+ */
+function patch_r_x0() = -(face_w / 2 - print_left_cover);
 
 /**
  * 框板 2D：外矩形减钢板镂空，上边中留排线口。
  */
-module tray_ring_2d(side) {
-    x0 = half_x0(side);
-    x1 = half_x1(side);
+module tray_ring_2d(x0, x1) {
     y0 = -rail_out;
     y1 = face_h + rail_out;
     sy0 = (face_h - win_h) / 2;
@@ -111,9 +119,22 @@ module tray_ring_2d(side) {
 }
 
 /**
- * 底边 60° 楔（YZ），挡玻璃下沿。
+ * 底边：先直角井放下玻璃+钢板总厚，再 60° 斜挡玻璃下沿。
  */
 module bottom_baffle_2d() {
+    polygon([
+        [-rail_out, 0],
+        [front_lip, 0],
+        [front_lip, stack_h],
+        [front_lip + bottom_inset, stack_h + baffle_bottom],
+        [-rail_out, stack_h + baffle_bottom]
+    ]);
+}
+
+/**
+ * 已打左半的旧 60° 楔。补救右半必须同高，否则屏会左右歪。
+ */
+module bottom_baffle_printed_2d() {
     polygon([
         [-rail_out, 0],
         [front_lip, 0],
@@ -164,16 +185,15 @@ module mid_bar() {
 }
 
 /**
- * 半框：6 mm 平板 + 玻璃外沿挡板。中线对缝，互不重叠；螺丝穿过本框打进竖条。
+ * 半框：6 mm 平板 + 玻璃外沿挡板。正式件中线重叠；螺丝穿过本框打进竖条。
+ * well=true 用直角井+60°；false 用已打件同款旧楔。
  */
-module tray_ring(side) {
-    x0 = half_x0(side);
-    x1 = half_x1(side);
+module tray_ring(side, x0, x1, well = true) {
     difference() {
         union() {
             translate([0, 0, -plate_t])
                 linear_extrude(height = plate_t)
-                    tray_ring_2d(side);
+                    tray_ring_2d(x0, x1);
             translate([
                 side * (ox + wall_t / 2),
                 inner_h / 2,
@@ -183,19 +203,37 @@ module tray_ring(side) {
             translate([x0, 0, 0])
                 rotate([90, 0, 90])
                     linear_extrude(height = x1 - x0)
-                        bottom_baffle_2d();
+                        if (well)
+                            bottom_baffle_2d();
+                        else
+                            bottom_baffle_printed_2d();
         }
         for (yy = [hole_bot_y1, hole_top_y1])
             translate([side * bar_hole_x, yy, -plate_t - 1])
-                cylinder(d = m3_through, h = plate_t + baffle_bottom + 4);
+                cylinder(d = m3_through, h = plate_t + stack_h + baffle_bottom + 4);
     }
 }
 
 /**
- * 托盘半件。
+ * 正式托盘半件。
  */
 module screen_tray(side) {
-    tray_ring(side);
+    tray_ring(side, half_x0(side), half_x1(side), well = true);
+}
+
+/**
+ * 右补救件：包住已打左半剩下的 130 mm。底槽与已打件同款旧楔，不当量产。
+ */
+module screen_tray_r_patch() {
+    tray_ring(1, patch_r_x0(), half_x1(1), well = false);
+}
+
+/**
+ * 倒 U 内腔：坐梁顶，两端开口。
+ */
+module beam_saddle_cavity() {
+    translate([0, 0, -wrap_down / 2 - 0.05])
+        cube([cavity_w, len_along + 2, wrap_down], center = true);
 }
 
 /**
@@ -207,8 +245,7 @@ module beam_saddle() {
     difference() {
         translate([0, 0, wall - oh / 2])
             cube([ow, len_along, oh], center = true);
-        translate([0, 0, -wrap_down / 2 - 0.05])
-            cube([cavity_w, len_along + 2, wrap_down], center = true);
+        beam_saddle_cavity();
         for (s = [-1, 1])
             translate([s * (cavity_w / 2 + wall / 2), 0, -wrap_down / 2])
                 rotate([0, 90, 0])
@@ -217,20 +254,25 @@ module beam_saddle() {
 }
 
 /**
- * 圆舌上的弧槽（YZ 面、沿 X 打通）。角度绕 +X，0° 为 −Z。
+ * 圆舌上的锁角槽：0°（朝抱箍）到 −90°。总装 −45° 时锁孔对准 0°，对侧开到 −180° 不必。
+ * 分段 hull，避免一次凸包挖空圆舌。已打座板锁孔在 −45°，落在此槽内。
  */
 module hinge_arc_slot() {
-    hull() {
-        for (a = [arc_a0, (arc_a0 + arc_a1) / 2, arc_a1])
-            rotate([a, 0, 0])
-                translate([0, 0, -arc_r])
-                    rotate([0, 90, 0])
-                        cylinder(d = m3_through, h = tongue_t + 4, center = true);
+    for (i = [0 : arc_n - 1]) {
+        a0 = arc_a0 + (arc_a1 - arc_a0) * i / arc_n;
+        a1 = arc_a0 + (arc_a1 - arc_a0) * (i + 1) / arc_n;
+        hull() {
+            for (a = [a0, a1])
+                rotate([a, 0, 0])
+                    translate([0, 0, -arc_r])
+                        rotate([0, 90, 0])
+                            cylinder(d = m3_through, h = hinge_cut_h, center = true);
+        }
     }
 }
 
 /**
- * 轴孔与锁角孔沿 X。锁孔在预览角 −45°，对准弧槽中点。
+ * 轴孔与锁角孔沿 X。锁孔仍在 −45°，对准已打座板，落在下半圆弧槽内。
  */
 module hinge_through_holes(h) {
     rotate([0, 90, 0])
@@ -243,6 +285,7 @@ module hinge_through_holes(h) {
 
 /**
  * 倒 U + 圆舌。打印件原点在铰链轴，0° 时鞍沿 −Z。
+ * 圆舌到倒 U 的肋沿 X 必须与圆舌同厚，否则夹不进已打夹耳。
  */
 module saddle_solid() {
     difference() {
@@ -253,7 +296,7 @@ module saddle_solid() {
                 rotate([0, 90, 0])
                     cylinder(d = 14, h = tongue_t, center = true);
                 translate([0, 0, -(tongue_r + 6)])
-                    cube([24, 16, 6], center = true);
+                    cube([tongue_t, 16, 6], center = true);
             }
             translate([0, 0, -(tongue_r + 8)])
                 beam_saddle();
@@ -261,6 +304,9 @@ module saddle_solid() {
         rotate([0, 90, 0])
             cylinder(d = m3_through, h = tongue_t + 4, center = true);
         hinge_arc_slot();
+        // hull 会填回内腔；再切一次。
+        translate([0, 0, -(tongue_r + 8)])
+            beam_saddle_cavity();
     }
 }
 
@@ -381,6 +427,8 @@ else if (part == "tray_l")
     screen_tray(-1);
 else if (part == "tray_r")
     screen_tray(1);
+else if (part == "tray_r_patch")
+    screen_tray_r_patch();
 else if (part == "explode")
     beam_clamp_preview();
 else
